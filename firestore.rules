@@ -1,0 +1,83 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() { return request.auth != null; }
+    function isSelf(uid) { return isSignedIn() && request.auth.uid == uid; }
+
+    // Read-only public collections
+    match /services/{id} {
+      allow read: if true;
+      allow write: if isSignedIn() && get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    match /products/{id} {
+      allow read: if true;
+      allow write: if isSignedIn() && get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Profiles
+    match /profiles/{uid} {
+      allow read: if isSignedIn();
+      allow write: if isSelf(uid) || (isSignedIn() && get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role == 'admin');
+    }
+
+    // Bookings
+    match /bookings/{bookingId} {
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || resource.data.mechanicId == request.auth.uid);
+      allow update: if isSignedIn() && (
+        // user can cancel their booking
+        (resource.data.userId == request.auth.uid && request.resource.data.status in ['cancelled','pending','accepted','in_progress','completed']) ||
+        // mechanic can change status except switching userId/mechanicId
+        (resource.data.mechanicId == request.auth.uid && request.resource.data.userId == resource.data.userId && request.resource.data.mechanicId == resource.data.mechanicId)
+      );
+      allow delete: if false;
+    }
+
+    // Reviews (only by booking.user after completion)
+    match /reviews/{reviewId} {
+      allow create: if isSignedIn() &&
+        request.resource.data.userId == request.auth.uid &&
+        get(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)).data.status == 'completed';
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Orders
+    match /orders/{orderId} {
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn() && get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role == 'admin';
+      allow delete: if false;
+    }
+
+    // Chat rooms and messages
+    match /chatRooms/{roomId} {
+      allow read, write: if isSignedIn() && request.auth.uid in resource.data.participantIds;
+      match /messages/{msgId} {
+        allow read, write: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/chatRooms/$(roomId)).data.participantIds;
+      }
+    }
+
+    // SOS Requests
+    match /sosRequests/{sosId} {
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow read: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role == 'mechanic' ||
+        get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role == 'admin'
+      );
+      allow update: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role in ['mechanic','admin']
+      );
+    }
+
+    // Notifications
+    match /notifications/{id} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create, delete: if false;
+    }
+  }
+}
