@@ -1,7 +1,19 @@
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
 import { Bell, Menu, User, Wrench } from "lucide-react";
 
 export const Header = () => {
+  const { user, profile, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  const handleAuthAction = () => {
+    if (user) {
+      signOut();
+    } else {
+      navigate('/auth');
+    }
+  };
   return (
     <header className="sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
@@ -11,7 +23,7 @@ export const Header = () => {
             <div className="w-10 h-10 bg-gradient-primary rounded-lg flex items-center justify-center">
               <Wrench className="w-6 h-6 text-primary-foreground" />
             </div>
-            <span className="text-xl font-bold text-foreground">ServiceHub</span>
+            <span className="text-xl font-bold text-foreground">AutoAid</span>
           </div>
 
           {/* Navigation - Hidden on mobile */}
@@ -37,10 +49,20 @@ export const Header = () => {
               <span className="absolute -top-1 -right-1 w-3 h-3 bg-accent rounded-full"></span>
             </Button>
             
-            <Button variant="outline" className="hidden sm:flex">
+            <Button 
+              variant="outline" 
+              className="hidden sm:flex"
+              onClick={handleAuthAction}
+            >
               <User className="w-4 h-4 mr-2" />
-              Sign In
+              {user ? `Welcome, ${profile?.full_name || 'User'}` : 'Sign In'}
             </Button>
+            
+            {user && (
+              <Button variant="ghost" onClick={signOut} className="hidden sm:flex">
+                Sign Out
+              </Button>
+            )}
             
             <Button variant="hero">
               Join as Mechanic

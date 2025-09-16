@@ -1,7 +1,13 @@
+import { useState } from "react";
 import { VehicleServiceCard } from "./VehicleServiceCard";
+import { BookingModal } from "./BookingModal";
 import { Bike, Car, Truck, Zap } from "lucide-react";
 
 export const ServicesSection = () => {
+  const [selectedService, setSelectedService] = useState<{
+    vehicleType: 'bicycle' | 'bike' | 'car' | 'truck';
+    services: string[];
+  } | null>(null);
   const vehicleServices = [
     {
       title: "Bicycle Services",
@@ -49,11 +55,25 @@ export const ServicesSection = () => {
               icon={service.icon}
               services={service.services}
               emergencyAvailable={service.emergencyAvailable}
-              onClick={() => console.log(`Selected ${service.title}`)}
+              onClick={() => setSelectedService({
+                vehicleType: service.title.toLowerCase().includes('bicycle') ? 'bicycle' :
+                           service.title.toLowerCase().includes('bike') ? 'bike' :
+                           service.title.toLowerCase().includes('car') ? 'car' : 'truck',
+                services: service.services
+              })}
             />
           ))}
         </div>
       </div>
+      
+      {selectedService && (
+        <BookingModal
+          isOpen={!!selectedService}
+          onClose={() => setSelectedService(null)}
+          vehicleType={selectedService.vehicleType}
+          services={selectedService.services}
+        />
+      )}
     </section>
   );
 };

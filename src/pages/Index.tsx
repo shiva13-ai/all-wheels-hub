@@ -3,8 +3,16 @@ import { HeroSection } from "@/components/HeroSection";
 import { ServicesSection } from "@/components/ServicesSection";
 import { FeaturesSection } from "@/components/FeaturesSection";
 import { Footer } from "@/components/Footer";
+import { SOSButton } from "@/components/SOSButton";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Index = () => {
+  const { loading } = useAuth();
+
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -12,6 +20,7 @@ const Index = () => {
       <ServicesSection />
       <FeaturesSection />
       <Footer />
+      <SOSButton />
     </div>
   );
 };
