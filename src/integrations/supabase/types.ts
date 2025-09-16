@@ -14,199 +14,7 @@ export type Database = {
   }
   public: {
     Tables: {
-      certificate_records: {
-        Row: {
-          certificate_hash: string | null
-          certificate_number: string
-          completion_date: string
-          course_name: string
-          created_at: string
-          document_type: Database["public"]["Enums"]["document_type"]
-          grade_or_marks: string | null
-          id: string
-          institution_id: string
-          is_active: boolean | null
-          metadata: Json | null
-          student_name: string
-          updated_at: string
-        }
-        Insert: {
-          certificate_hash?: string | null
-          certificate_number: string
-          completion_date: string
-          course_name: string
-          created_at?: string
-          document_type: Database["public"]["Enums"]["document_type"]
-          grade_or_marks?: string | null
-          id?: string
-          institution_id: string
-          is_active?: boolean | null
-          metadata?: Json | null
-          student_name: string
-          updated_at?: string
-        }
-        Update: {
-          certificate_hash?: string | null
-          certificate_number?: string
-          completion_date?: string
-          course_name?: string
-          created_at?: string
-          document_type?: Database["public"]["Enums"]["document_type"]
-          grade_or_marks?: string | null
-          id?: string
-          institution_id?: string
-          is_active?: boolean | null
-          metadata?: Json | null
-          student_name?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "certificate_records_institution_id_fkey"
-            columns: ["institution_id"]
-            isOneToOne: false
-            referencedRelation: "institutions"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      institutions: {
-        Row: {
-          accreditation_status: string | null
-          address: string | null
-          code: string
-          contact_email: string | null
-          contact_phone: string | null
-          created_at: string
-          established_year: number | null
-          id: string
-          is_verified: boolean | null
-          name: string
-          updated_at: string
-        }
-        Insert: {
-          accreditation_status?: string | null
-          address?: string | null
-          code: string
-          contact_email?: string | null
-          contact_phone?: string | null
-          created_at?: string
-          established_year?: number | null
-          id?: string
-          is_verified?: boolean | null
-          name: string
-          updated_at?: string
-        }
-        Update: {
-          accreditation_status?: string | null
-          address?: string | null
-          code?: string
-          contact_email?: string | null
-          contact_phone?: string | null
-          created_at?: string
-          established_year?: number | null
-          id?: string
-          is_verified?: boolean | null
-          name?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      profiles: {
-        Row: {
-          created_at: string
-          email: string | null
-          full_name: string | null
-          id: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          email?: string | null
-          full_name?: string | null
-          id?: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          email?: string | null
-          full_name?: string | null
-          id?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      verification_requests: {
-        Row: {
-          confidence_score: number | null
-          created_at: string
-          document_type: Database["public"]["Enums"]["document_type"] | null
-          extracted_data: Json | null
-          file_name: string
-          file_size: number
-          file_type: string
-          flags: Json | null
-          id: string
-          institution_id: string | null
-          processed_at: string | null
-          requester_email: string | null
-          requester_name: string | null
-          requester_organization: string | null
-          status: Database["public"]["Enums"]["verification_status"] | null
-          updated_at: string
-          verification_result: Json | null
-        }
-        Insert: {
-          confidence_score?: number | null
-          created_at?: string
-          document_type?: Database["public"]["Enums"]["document_type"] | null
-          extracted_data?: Json | null
-          file_name: string
-          file_size: number
-          file_type: string
-          flags?: Json | null
-          id?: string
-          institution_id?: string | null
-          processed_at?: string | null
-          requester_email?: string | null
-          requester_name?: string | null
-          requester_organization?: string | null
-          status?: Database["public"]["Enums"]["verification_status"] | null
-          updated_at?: string
-          verification_result?: Json | null
-        }
-        Update: {
-          confidence_score?: number | null
-          created_at?: string
-          document_type?: Database["public"]["Enums"]["document_type"] | null
-          extracted_data?: Json | null
-          file_name?: string
-          file_size?: number
-          file_type?: string
-          flags?: Json | null
-          id?: string
-          institution_id?: string | null
-          processed_at?: string | null
-          requester_email?: string | null
-          requester_name?: string | null
-          requester_organization?: string | null
-          status?: Database["public"]["Enums"]["verification_status"] | null
-          updated_at?: string
-          verification_result?: Json | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "verification_requests_institution_id_fkey"
-            columns: ["institution_id"]
-            isOneToOne: false
-            referencedRelation: "institutions"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
+      [_ in never]: never
     }
     Views: {
       [_ in never]: never
@@ -215,13 +23,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      document_type:
-        | "degree"
-        | "diploma"
-        | "certificate"
-        | "marksheet"
-        | "other"
-      verification_status: "pending" | "verified" | "rejected" | "suspicious"
+      [_ in never]: never
     }
     CompositeTypes: {
       [_ in never]: never
@@ -348,9 +150,6 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {
-      document_type: ["degree", "diploma", "certificate", "marksheet", "other"],
-      verification_status: ["pending", "verified", "rejected", "suspicious"],
-    },
+    Enums: {},
   },
 } as const
