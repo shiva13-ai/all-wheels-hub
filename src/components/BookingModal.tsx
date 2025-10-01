@@ -14,15 +14,17 @@ interface BookingModalProps {
   onClose: () => void;
   vehicleType: 'bicycle' | 'bike' | 'car' | 'truck';
   services: string[];
+  preSelectedMechanicId?: string;
 }
 
-export const BookingModal = ({ isOpen, onClose, vehicleType, services }: BookingModalProps) => {
+export const BookingModal = ({ isOpen, onClose, vehicleType, services, preSelectedMechanicId }: BookingModalProps) => {
   const [formData, setFormData] = useState<CreateBookingData>({
     service_type: '',
     vehicle_type: vehicleType,
     description: '',
     location: '',
     scheduled_date: '',
+    mechanic_id: preSelectedMechanicId,
   });
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
