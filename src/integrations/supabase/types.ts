@@ -14,7 +14,205 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      bookings: {
+        Row: {
+          created_at: string
+          description: string | null
+          estimated_cost: number | null
+          final_cost: number | null
+          id: string
+          location: string
+          mechanic_id: string | null
+          scheduled_date: string | null
+          service_type: string
+          status: string
+          updated_at: string
+          user_id: string
+          vehicle_type: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          estimated_cost?: number | null
+          final_cost?: number | null
+          id?: string
+          location: string
+          mechanic_id?: string | null
+          scheduled_date?: string | null
+          service_type: string
+          status?: string
+          updated_at?: string
+          user_id: string
+          vehicle_type: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          estimated_cost?: number | null
+          final_cost?: number | null
+          id?: string
+          location?: string
+          mechanic_id?: string | null
+          scheduled_date?: string | null
+          service_type?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+          vehicle_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bookings_mechanic_id_fkey"
+            columns: ["mechanic_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          full_name: string | null
+          id: string
+          is_available: boolean
+          is_verified: boolean
+          location: string | null
+          phone: string | null
+          rating: number
+          role: string
+          services_offered: string[] | null
+          total_reviews: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          is_available?: boolean
+          is_verified?: boolean
+          location?: string | null
+          phone?: string | null
+          rating?: number
+          role?: string
+          services_offered?: string[] | null
+          total_reviews?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          is_available?: boolean
+          is_verified?: boolean
+          location?: string | null
+          phone?: string | null
+          rating?: number
+          role?: string
+          services_offered?: string[] | null
+          total_reviews?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      reviews: {
+        Row: {
+          booking_id: string | null
+          comment: string | null
+          created_at: string
+          id: string
+          mechanic_id: string
+          rating: number
+          user_id: string
+        }
+        Insert: {
+          booking_id?: string | null
+          comment?: string | null
+          created_at?: string
+          id?: string
+          mechanic_id: string
+          rating: number
+          user_id: string
+        }
+        Update: {
+          booking_id?: string | null
+          comment?: string | null
+          created_at?: string
+          id?: string
+          mechanic_id?: string
+          rating?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reviews_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reviews_mechanic_id_fkey"
+            columns: ["mechanic_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      sos_requests: {
+        Row: {
+          assigned_mechanic_id: string | null
+          created_at: string
+          id: string
+          issue_description: string
+          location: string
+          status: string
+          updated_at: string
+          urgency_level: string
+          user_id: string
+          vehicle_type: string
+        }
+        Insert: {
+          assigned_mechanic_id?: string | null
+          created_at?: string
+          id?: string
+          issue_description: string
+          location: string
+          status?: string
+          updated_at?: string
+          urgency_level?: string
+          user_id: string
+          vehicle_type: string
+        }
+        Update: {
+          assigned_mechanic_id?: string | null
+          created_at?: string
+          id?: string
+          issue_description?: string
+          location?: string
+          status?: string
+          updated_at?: string
+          urgency_level?: string
+          user_id?: string
+          vehicle_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sos_requests_assigned_mechanic_id_fkey"
+            columns: ["assigned_mechanic_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
