@@ -74,6 +74,7 @@ export type Database = {
         Row: {
           avatar_url: string | null
           created_at: string
+          experience_years: number | null
           full_name: string | null
           id: string
           is_available: boolean
@@ -83,13 +84,16 @@ export type Database = {
           rating: number
           role: string
           services_offered: string[] | null
+          shop_photo_url: string | null
           total_reviews: number
+          udyam_registration_number: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
           avatar_url?: string | null
           created_at?: string
+          experience_years?: number | null
           full_name?: string | null
           id?: string
           is_available?: boolean
@@ -99,13 +103,16 @@ export type Database = {
           rating?: number
           role?: string
           services_offered?: string[] | null
+          shop_photo_url?: string | null
           total_reviews?: number
+          udyam_registration_number?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
           avatar_url?: string | null
           created_at?: string
+          experience_years?: number | null
           full_name?: string | null
           id?: string
           is_available?: boolean
@@ -115,7 +122,9 @@ export type Database = {
           rating?: number
           role?: string
           services_offered?: string[] | null
+          shop_photo_url?: string | null
           total_reviews?: number
+          udyam_registration_number?: string | null
           updated_at?: string
           user_id?: string
         }

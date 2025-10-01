@@ -13,6 +13,9 @@ export type UserProfile = {
   total_reviews: number;
   is_verified: boolean;
   is_available: boolean;
+  udyam_registration_number: string | null;
+  shop_photo_url: string | null;
+  experience_years: number | null;
   created_at: string;
   updated_at: string;
 };
