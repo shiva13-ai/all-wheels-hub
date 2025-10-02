@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { bookingsService, CreateBookingData } from '@/services/supabase/bookings';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCurrentLocation } from '@/hooks/useCurrentLocation';
+import { MapPin, Loader2 } from 'lucide-react';
 
 interface BookingModalProps {
   isOpen: boolean;
@@ -25,10 +27,13 @@ export const BookingModal = ({ isOpen, onClose, vehicleType, services, preSelect
     location: '',
     scheduled_date: '',
     mechanic_id: preSelectedMechanicId,
+    latitude: undefined,
+    longitude: undefined,
   });
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
+  const { location: currentLocation, loading: locationLoading, getCurrentLocation } = useCurrentLocation();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,13 +110,48 @@ export const BookingModal = ({ isOpen, onClose, vehicleType, services, preSelect
 
           <div className="space-y-2">
             <Label htmlFor="location">Location</Label>
-            <Input
-              id="location"
-              value={formData.location}
-              onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-              placeholder="Enter your location"
-              required
-            />
+            <div className="flex gap-2">
+              <Input
+                id="location"
+                value={formData.location}
+                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                placeholder="Enter your location"
+                required
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => {
+                  getCurrentLocation();
+                  setTimeout(() => {
+                    if (currentLocation) {
+                      setFormData({
+                        ...formData,
+                        latitude: currentLocation.latitude,
+                        longitude: currentLocation.longitude,
+                      });
+                      toast({
+                        title: "Location captured",
+                        description: "Your current location has been captured",
+                      });
+                    }
+                  }, 1000);
+                }}
+                disabled={locationLoading}
+              >
+                {locationLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <MapPin className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+            {formData.latitude && formData.longitude && (
+              <p className="text-xs text-muted-foreground">
+                Coordinates: {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">

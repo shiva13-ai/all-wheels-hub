@@ -24,6 +24,8 @@ export type CreateBookingData = {
   scheduled_date?: string;
   estimated_cost?: number;
   mechanic_id?: string;
+  latitude?: number;
+  longitude?: number;
 };
 
 export const bookingsService = {

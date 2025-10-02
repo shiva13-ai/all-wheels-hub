@@ -21,8 +21,13 @@ export type Database = {
           estimated_cost: number | null
           final_cost: number | null
           id: string
+          latitude: number | null
           location: string
+          longitude: number | null
           mechanic_id: string | null
+          mechanic_last_location_update: string | null
+          mechanic_latitude: number | null
+          mechanic_longitude: number | null
           scheduled_date: string | null
           service_type: string
           status: string
@@ -36,8 +41,13 @@ export type Database = {
           estimated_cost?: number | null
           final_cost?: number | null
           id?: string
+          latitude?: number | null
           location: string
+          longitude?: number | null
           mechanic_id?: string | null
+          mechanic_last_location_update?: string | null
+          mechanic_latitude?: number | null
+          mechanic_longitude?: number | null
           scheduled_date?: string | null
           service_type: string
           status?: string
@@ -51,8 +61,13 @@ export type Database = {
           estimated_cost?: number | null
           final_cost?: number | null
           id?: string
+          latitude?: number | null
           location?: string
+          longitude?: number | null
           mechanic_id?: string | null
+          mechanic_last_location_update?: string | null
+          mechanic_latitude?: number | null
+          mechanic_longitude?: number | null
           scheduled_date?: string | null
           service_type?: string
           status?: string
@@ -181,7 +196,12 @@ export type Database = {
           created_at: string
           id: string
           issue_description: string
+          latitude: number | null
           location: string
+          longitude: number | null
+          mechanic_last_location_update: string | null
+          mechanic_latitude: number | null
+          mechanic_longitude: number | null
           status: string
           updated_at: string
           urgency_level: string
@@ -193,7 +213,12 @@ export type Database = {
           created_at?: string
           id?: string
           issue_description: string
+          latitude?: number | null
           location: string
+          longitude?: number | null
+          mechanic_last_location_update?: string | null
+          mechanic_latitude?: number | null
+          mechanic_longitude?: number | null
           status?: string
           updated_at?: string
           urgency_level?: string
@@ -205,7 +230,12 @@ export type Database = {
           created_at?: string
           id?: string
           issue_description?: string
+          latitude?: number | null
           location?: string
+          longitude?: number | null
+          mechanic_last_location_update?: string | null
+          mechanic_latitude?: number | null
+          mechanic_longitude?: number | null
           status?: string
           updated_at?: string
           urgency_level?: string
