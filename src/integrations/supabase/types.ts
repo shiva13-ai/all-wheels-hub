@@ -85,6 +85,73 @@ export type Database = {
           },
         ]
       }
+      chat_rooms: {
+        Row: {
+          booking_id: string
+          created_at: string
+          id: string
+          last_message_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          booking_id: string
+          created_at?: string
+          id?: string
+          last_message_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          booking_id?: string
+          created_at?: string
+          id?: string
+          last_message_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_rooms_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: true
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      messages: {
+        Row: {
+          chat_room_id: string
+          created_at: string
+          id: string
+          is_read: boolean
+          message_text: string
+          sender_id: string
+        }
+        Insert: {
+          chat_room_id: string
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          message_text: string
+          sender_id: string
+        }
+        Update: {
+          chat_room_id?: string
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          message_text?: string
+          sender_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_chat_room_id_fkey"
+            columns: ["chat_room_id"]
+            isOneToOne: false
+            referencedRelation: "chat_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
