@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { Bell, Menu, User, Wrench } from "lucide-react";
+import { Bell, Menu, User, Wrench, MessageCircle } from "lucide-react";
 
 export const Header = () => {
   const { user, profile, signOut } = useAuth();
@@ -44,6 +44,17 @@ export const Header = () => {
 
           {/* Actions */}
           <div className="flex items-center space-x-4">
+            {user && (
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={() => navigate('/chat')}
+                className="relative"
+              >
+                <MessageCircle className="w-5 h-5" />
+              </Button>
+            )}
+            
             <Button variant="ghost" size="icon" className="relative">
               <Bell className="w-5 h-5" />
               <span className="absolute -top-1 -right-1 w-3 h-3 bg-accent rounded-full"></span>

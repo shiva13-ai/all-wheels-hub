@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { bookingsService, CreateBookingData } from '@/services/supabase/bookings';
+import { chatService } from '@/services/supabase/chat';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCurrentLocation } from '@/hooks/useCurrentLocation';
 import { MapPin, Loader2 } from 'lucide-react';
@@ -51,6 +52,11 @@ export const BookingModal = ({ isOpen, onClose, vehicleType, services, preSelect
       const { data, error } = await bookingsService.createBooking(formData);
       if (error) {
         throw error;
+      }
+      
+      // Create chat room for the booking
+      if (data?.id) {
+        await chatService.ensureChatRoom(data.id);
       }
       
       toast({
