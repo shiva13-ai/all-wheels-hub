@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
+import { useEffect, useState, useRef } from 'react';
+import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
 import { LatLng } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Button } from './ui/button';
@@ -28,17 +28,23 @@ function LocationMarker({
   position: LatLng | null; 
   setPosition: (pos: LatLng) => void;
 }) {
-  const map = useMapEvents({
+  useMapEvents({
     click(e) {
       setPosition(e.latlng);
     },
   });
 
-  if (!position) {
-    return null;
-  }
+  return position ? <Marker position={position} /> : null;
+}
 
-  return <Marker position={position} />;
+function MapUpdater({ center }: { center: [number, number] }) {
+  const map = useMap();
+  
+  useEffect(() => {
+    map.setView(center, map.getZoom());
+  }, [center, map]);
+  
+  return null;
 }
 
 export const LocationMapPicker = ({ 
@@ -124,15 +130,16 @@ export const LocationMapPicker = ({
 
       <div className="rounded-lg overflow-hidden border border-border h-[300px]">
         <MapContainer
-          center={mapCenter}
+          center={[initialLat, initialLng]}
           zoom={13}
           style={{ height: '100%', width: '100%' }}
-          key={`${mapCenter[0]}-${mapCenter[1]}`}
+          scrollWheelZoom={true}
         >
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
+          <MapUpdater center={mapCenter} />
           <LocationMarker position={position} setPosition={setPosition} />
         </MapContainer>
       </div>
