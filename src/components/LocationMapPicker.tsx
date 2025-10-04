@@ -1,19 +1,13 @@
-import { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
-import { LatLng } from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+import { useState } from 'react';
+import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
 import { Button } from './ui/button';
 import { MapPin, Navigation } from 'lucide-react';
 import { toast } from 'sonner';
-import L from 'leaflet';
 
-// Fix for default marker icon
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-});
+const mapContainerStyle = {
+  width: '100%',
+  height: '100%'
+};
 
 interface LocationMapPickerProps {
   onLocationSelect: (location: string, latitude: number, longitude: number) => void;
@@ -21,40 +15,19 @@ interface LocationMapPickerProps {
   initialLng?: number;
 }
 
-function LocationMarker({ 
-  position, 
-  setPosition 
-}: { 
-  position: LatLng | null; 
-  setPosition: (pos: LatLng) => void;
-}) {
-  useMapEvents({
-    click(e) {
-      setPosition(e.latlng);
-    },
-  });
-
-  return position ? <Marker position={position} /> : null;
-}
-
-function MapUpdater({ center }: { center: [number, number] }) {
-  const map = useMap();
-  
-  useEffect(() => {
-    map.setView(center, map.getZoom());
-  }, [center, map]);
-  
-  return null;
-}
-
 export const LocationMapPicker = ({ 
   onLocationSelect, 
   initialLat = 28.6139, 
   initialLng = 77.2090 
 }: LocationMapPickerProps) => {
-  const [position, setPosition] = useState<LatLng | null>(null);
+  const [position, setPosition] = useState<{ lat: number; lng: number } | null>(null);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
-  const [mapCenter, setMapCenter] = useState<[number, number]>([initialLat, initialLng]);
+  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number }>({ lat: initialLat, lng: initialLng });
+  
+  const { isLoaded } = useJsApiLoader({
+    id: 'google-map-script',
+    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '',
+  });
 
   const handleGetCurrentLocation = () => {
     setIsGettingLocation(true);
@@ -67,9 +40,9 @@ export const LocationMapPicker = ({
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const newPos = new LatLng(pos.coords.latitude, pos.coords.longitude);
+        const newPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setPosition(newPos);
-        setMapCenter([pos.coords.latitude, pos.coords.longitude]);
+        setMapCenter(newPos);
         toast.success("Current location detected!");
         setIsGettingLocation(false);
       },
@@ -129,19 +102,27 @@ export const LocationMapPicker = ({
       </div>
 
       <div className="rounded-lg overflow-hidden border border-border h-[300px]">
-        <MapContainer
-          center={[initialLat, initialLng]}
-          zoom={13}
-          style={{ height: '100%', width: '100%' }}
-          scrollWheelZoom={true}
-        >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-          <MapUpdater center={mapCenter} />
-          <LocationMarker position={position} setPosition={setPosition} />
-        </MapContainer>
+        {isLoaded ? (
+          <GoogleMap
+            mapContainerStyle={mapContainerStyle}
+            center={mapCenter}
+            zoom={13}
+            onClick={(e) => {
+              if (e.latLng) {
+                setPosition({
+                  lat: e.latLng.lat(),
+                  lng: e.latLng.lng()
+                });
+              }
+            }}
+          >
+            {position && <Marker position={position} />}
+          </GoogleMap>
+        ) : (
+          <div className="flex items-center justify-center h-full bg-muted">
+            Loading map...
+          </div>
+        )}
       </div>
 
       {position && (

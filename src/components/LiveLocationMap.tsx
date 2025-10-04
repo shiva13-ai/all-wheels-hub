@@ -1,22 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
-import { Icon } from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+import { GoogleMap, Marker, InfoWindow, useJsApiLoader } from '@react-google-maps/api';
 import { supabase } from '@/integrations/supabase/client';
 import { Card } from '@/components/ui/card';
 import { Loader2, MapPin, User } from 'lucide-react';
 
-// Fix for default marker icons in react-leaflet
-import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
-import markerIcon from 'leaflet/dist/images/marker-icon.png';
-import markerShadow from 'leaflet/dist/images/marker-shadow.png';
-
-delete (Icon.Default.prototype as any)._getIconUrl;
-Icon.Default.mergeOptions({
-  iconRetinaUrl: markerIcon2x,
-  iconUrl: markerIcon,
-  shadowUrl: markerShadow,
-});
+const mapContainerStyle = {
+  width: '100%',
+  height: '100%'
+};
 
 interface LiveLocationMapProps {
   bookingId?: string;
@@ -32,14 +23,6 @@ interface LocationData {
   location?: string;
 }
 
-function MapUpdater({ center }: { center: [number, number] }) {
-  const map = useMap();
-  useEffect(() => {
-    map.setView(center, 13);
-  }, [center, map]);
-  return null;
-}
-
 const LiveLocationMap: React.FC<LiveLocationMapProps> = ({
   bookingId,
   sosRequestId,
@@ -47,23 +30,31 @@ const LiveLocationMap: React.FC<LiveLocationMapProps> = ({
 }) => {
   const [locationData, setLocationData] = useState<LocationData>({});
   const [loading, setLoading] = useState(true);
-  const [currentPosition, setCurrentPosition] = useState<[number, number] | null>(null);
+  const [currentPosition, setCurrentPosition] = useState<{ lat: number; lng: number } | null>(null);
+  const [selectedMarker, setSelectedMarker] = useState<'user' | 'mechanic' | null>(null);
+  
+  const { isLoaded } = useJsApiLoader({
+    id: 'google-map-script',
+    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '',
+  });
 
   // Get current position
   useEffect(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          const pos: [number, number] = [position.coords.latitude, position.coords.longitude];
-          setCurrentPosition(pos);
+          setCurrentPosition({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          });
         },
         (error) => {
           console.error('Error getting location:', error);
-          setCurrentPosition([28.6139, 77.2090]); // Default to Delhi
+          setCurrentPosition({ lat: 28.6139, lng: 77.2090 }); // Default to Delhi
         }
       );
     } else {
-      setCurrentPosition([28.6139, 77.2090]);
+      setCurrentPosition({ lat: 28.6139, lng: 77.2090 });
     }
   }, []);
 
@@ -145,8 +136,8 @@ const LiveLocationMap: React.FC<LiveLocationMapProps> = ({
       await supabase
         .from(table)
         .update({
-          mechanic_latitude: currentPosition[0],
-          mechanic_longitude: currentPosition[1],
+          mechanic_latitude: currentPosition.lat,
+          mechanic_longitude: currentPosition.lng,
           mechanic_last_location_update: new Date().toISOString(),
         })
         .eq('id', id);
@@ -159,7 +150,7 @@ const LiveLocationMap: React.FC<LiveLocationMapProps> = ({
     return () => clearInterval(interval);
   }, [userRole, currentPosition, bookingId, sosRequestId]);
 
-  if (loading || !currentPosition) {
+  if (loading || !currentPosition || !isLoaded) {
     return (
       <Card className="flex items-center justify-center h-96 bg-card">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -167,56 +158,63 @@ const LiveLocationMap: React.FC<LiveLocationMapProps> = ({
     );
   }
 
-  const mapCenter: [number, number] = 
+  const mapCenter = 
     (userRole === 'user' && locationData.mechanicLat && locationData.mechanicLng)
-      ? [locationData.mechanicLat, locationData.mechanicLng]
+      ? { lat: locationData.mechanicLat, lng: locationData.mechanicLng }
       : (locationData.userLat && locationData.userLng)
-      ? [locationData.userLat, locationData.userLng]
+      ? { lat: locationData.userLat, lng: locationData.userLng }
       : currentPosition;
 
   return (
     <Card className="overflow-hidden h-96 bg-card">
-      <MapContainer
+      <GoogleMap
+        mapContainerStyle={mapContainerStyle}
         center={mapCenter}
         zoom={13}
-        style={{ height: '100%', width: '100%' }}
-        className="z-0"
       >
-        <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
-        <MapUpdater center={mapCenter} />
-        
         {/* User Location Marker */}
         {locationData.userLat && locationData.userLng && (
-          <Marker position={[locationData.userLat, locationData.userLng]}>
-            <Popup>
-              <div className="flex items-center gap-2">
-                <User className="w-4 h-4" />
-                <div>
-                  <p className="font-semibold">User Location</p>
-                  <p className="text-sm text-muted-foreground">{locationData.location}</p>
+          <Marker 
+            position={{ lat: locationData.userLat, lng: locationData.userLng }}
+            onClick={() => setSelectedMarker('user')}
+          >
+            {selectedMarker === 'user' && (
+              <InfoWindow onCloseClick={() => setSelectedMarker(null)}>
+                <div className="flex items-center gap-2 p-1">
+                  <User className="w-4 h-4" />
+                  <div>
+                    <p className="font-semibold">User Location</p>
+                    <p className="text-sm text-muted-foreground">{locationData.location}</p>
+                  </div>
                 </div>
-              </div>
-            </Popup>
+              </InfoWindow>
+            )}
           </Marker>
         )}
 
         {/* Mechanic Location Marker */}
         {locationData.mechanicLat && locationData.mechanicLng && (
-          <Marker position={[locationData.mechanicLat, locationData.mechanicLng]}>
-            <Popup>
-              <div className="flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-primary" />
-                <div>
-                  <p className="font-semibold">Mechanic Location</p>
-                  <p className="text-sm text-muted-foreground">Live tracking</p>
+          <Marker 
+            position={{ lat: locationData.mechanicLat, lng: locationData.mechanicLng }}
+            onClick={() => setSelectedMarker('mechanic')}
+            icon={{
+              url: 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png'
+            }}
+          >
+            {selectedMarker === 'mechanic' && (
+              <InfoWindow onCloseClick={() => setSelectedMarker(null)}>
+                <div className="flex items-center gap-2 p-1">
+                  <MapPin className="w-4 h-4 text-primary" />
+                  <div>
+                    <p className="font-semibold">Mechanic Location</p>
+                    <p className="text-sm text-muted-foreground">Live tracking</p>
+                  </div>
                 </div>
-              </div>
-            </Popup>
+              </InfoWindow>
+            )}
           </Marker>
         )}
-      </MapContainer>
+      </GoogleMap>
     </Card>
   );
 };
