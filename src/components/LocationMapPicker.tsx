@@ -28,13 +28,17 @@ function LocationMarker({
   position: LatLng | null; 
   setPosition: (pos: LatLng) => void;
 }) {
-  useMapEvents({
+  const map = useMapEvents({
     click(e) {
       setPosition(e.latlng);
     },
   });
 
-  return position ? <Marker position={position} /> : null;
+  if (!position) {
+    return null;
+  }
+
+  return <Marker position={position} />;
 }
 
 export const LocationMapPicker = ({ 
