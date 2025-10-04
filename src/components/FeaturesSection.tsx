@@ -1,5 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import { 
   MapPin, 
   MessageCircle, 
@@ -12,6 +14,9 @@ import {
 } from "lucide-react";
 
 export const FeaturesSection = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+
   const features = [
     {
       icon: MapPin,
@@ -77,23 +82,32 @@ export const FeaturesSection = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-          {features.map((feature, index) => (
-            <Card key={index} className="hover:shadow-elegant transition-all duration-300 hover:scale-105 bg-card border-border group">
-              <CardHeader className="text-center pb-4">
-                <div className="mx-auto w-12 h-12 bg-muted/50 rounded-lg flex items-center justify-center mb-4 group-hover:bg-gradient-primary group-hover:text-primary-foreground transition-all duration-300">
-                  <feature.icon className={`w-6 h-6 ${feature.color} group-hover:text-primary-foreground`} />
-                </div>
-                <CardTitle className="text-lg font-semibold text-card-foreground">
-                  {feature.title}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground text-center leading-relaxed">
-                  {feature.description}
-                </p>
-              </CardContent>
-            </Card>
-          ))}
+          {features.map((feature, index) => {
+            const isInAppComm = feature.title === "In-App Communication";
+            const handleClick = isInAppComm && user ? () => navigate('/chat') : undefined;
+            
+            return (
+              <Card 
+                key={index} 
+                className={`hover:shadow-elegant transition-all duration-300 hover:scale-105 bg-card border-border group ${isInAppComm && user ? 'cursor-pointer' : ''}`}
+                onClick={handleClick}
+              >
+                <CardHeader className="text-center pb-4">
+                  <div className="mx-auto w-12 h-12 bg-muted/50 rounded-lg flex items-center justify-center mb-4 group-hover:bg-gradient-primary group-hover:text-primary-foreground transition-all duration-300">
+                    <feature.icon className={`w-6 h-6 ${feature.color} group-hover:text-primary-foreground`} />
+                  </div>
+                  <CardTitle className="text-lg font-semibold text-card-foreground">
+                    {feature.title}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground text-center leading-relaxed">
+                    {feature.description}
+                  </p>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
 
         <div className="text-center">
