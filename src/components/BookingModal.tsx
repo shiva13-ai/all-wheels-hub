@@ -9,7 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { bookingsService, CreateBookingData } from '@/services/supabase/bookings';
 import { chatService } from '@/services/supabase/chat';
 import { useAuth } from '@/contexts/AuthContext';
-import { LocationMapPicker } from './LocationMapPicker';
+import { MapPickerDialog } from './MapPickerDialog';
 import { Map } from 'lucide-react';
 
 interface BookingModalProps {
@@ -128,7 +128,7 @@ export const BookingModal = ({ isOpen, onClose, vehicleType, services, preSelect
                 type="button"
                 variant="outline"
                 size="icon"
-                onClick={() => setShowMapPicker(!showMapPicker)}
+                onClick={() => setShowMapPicker(true)}
               >
                 <Map className="h-4 w-4" />
               </Button>
@@ -137,22 +137,6 @@ export const BookingModal = ({ isOpen, onClose, vehicleType, services, preSelect
               <p className="text-xs text-muted-foreground">
                 Coordinates: {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}
               </p>
-            )}
-            
-            {showMapPicker && (
-              <LocationMapPicker
-                onLocationSelect={(location, latitude, longitude) => {
-                  setFormData({
-                    ...formData,
-                    location,
-                    latitude,
-                    longitude,
-                  });
-                  setShowMapPicker(false);
-                }}
-                initialLat={formData.latitude}
-                initialLng={formData.longitude}
-              />
             )}
           </div>
 
@@ -187,6 +171,21 @@ export const BookingModal = ({ isOpen, onClose, vehicleType, services, preSelect
           </div>
         </form>
       </DialogContent>
+      
+      <MapPickerDialog
+        isOpen={showMapPicker}
+        onClose={() => setShowMapPicker(false)}
+        onLocationSelect={(location, latitude, longitude) => {
+          setFormData({
+            ...formData,
+            location,
+            latitude,
+            longitude,
+          });
+        }}
+        initialLat={formData.latitude}
+        initialLng={formData.longitude}
+      />
     </Dialog>
   );
 };
