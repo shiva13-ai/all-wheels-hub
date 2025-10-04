@@ -9,8 +9,8 @@ import { useToast } from '@/hooks/use-toast';
 import { bookingsService, CreateBookingData } from '@/services/supabase/bookings';
 import { chatService } from '@/services/supabase/chat';
 import { useAuth } from '@/contexts/AuthContext';
-import { useCurrentLocation } from '@/hooks/useCurrentLocation';
-import { MapPin, Loader2 } from 'lucide-react';
+import { LocationMapPicker } from './LocationMapPicker';
+import { Map } from 'lucide-react';
 
 interface BookingModalProps {
   isOpen: boolean;
@@ -32,9 +32,9 @@ export const BookingModal = ({ isOpen, onClose, vehicleType, services, preSelect
     longitude: undefined,
   });
   const [loading, setLoading] = useState(false);
+  const [showMapPicker, setShowMapPicker] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
-  const { location: currentLocation, loading: locationLoading, getCurrentLocation } = useCurrentLocation();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,42 +121,38 @@ export const BookingModal = ({ isOpen, onClose, vehicleType, services, preSelect
                 id="location"
                 value={formData.location}
                 onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                placeholder="Enter your location"
+                placeholder="Enter your location or select from map"
                 required
               />
               <Button
                 type="button"
                 variant="outline"
                 size="icon"
-                onClick={() => {
-                  getCurrentLocation();
-                  setTimeout(() => {
-                    if (currentLocation) {
-                      setFormData({
-                        ...formData,
-                        latitude: currentLocation.latitude,
-                        longitude: currentLocation.longitude,
-                      });
-                      toast({
-                        title: "Location captured",
-                        description: "Your current location has been captured",
-                      });
-                    }
-                  }, 1000);
-                }}
-                disabled={locationLoading}
+                onClick={() => setShowMapPicker(!showMapPicker)}
               >
-                {locationLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <MapPin className="h-4 w-4" />
-                )}
+                <Map className="h-4 w-4" />
               </Button>
             </div>
             {formData.latitude && formData.longitude && (
               <p className="text-xs text-muted-foreground">
                 Coordinates: {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}
               </p>
+            )}
+            
+            {showMapPicker && (
+              <LocationMapPicker
+                onLocationSelect={(location, latitude, longitude) => {
+                  setFormData({
+                    ...formData,
+                    location,
+                    latitude,
+                    longitude,
+                  });
+                  setShowMapPicker(false);
+                }}
+                initialLat={formData.latitude}
+                initialLng={formData.longitude}
+              />
             )}
           </div>
 
