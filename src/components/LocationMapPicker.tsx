@@ -49,6 +49,11 @@ export const LocationMapPicker = ({
       (error) => {
         toast.error("Failed to get location: " + error.message);
         setIsGettingLocation(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
       }
     );
   };
