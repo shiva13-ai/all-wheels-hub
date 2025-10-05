@@ -41,12 +41,14 @@ export const LocationMapPicker = ({
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const newPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        console.log('Detected location:', newPos, 'Accuracy:', pos.coords.accuracy, 'meters');
         setPosition(newPos);
         setMapCenter(newPos);
-        toast.success("Current location detected!");
+        toast.success(`Location detected! (±${Math.round(pos.coords.accuracy)}m accuracy)`);
         setIsGettingLocation(false);
       },
       (error) => {
+        console.error('Geolocation error:', error);
         toast.error("Failed to get location: " + error.message);
         setIsGettingLocation(false);
       },
@@ -111,7 +113,7 @@ export const LocationMapPicker = ({
           <GoogleMap
             mapContainerStyle={mapContainerStyle}
             center={mapCenter}
-            zoom={13}
+            zoom={position ? 15 : 13}
             onClick={(e) => {
               if (e.latLng) {
                 setPosition({
