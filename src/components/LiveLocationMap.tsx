@@ -35,7 +35,7 @@ const LiveLocationMap: React.FC<LiveLocationMapProps> = ({
   
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
-    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '',
+    googleMapsApiKey: 'AIzaSyCB-fLf_OBqt6Y-zivznCupmZV6iB1HGzg',
   });
 
   // Get current position

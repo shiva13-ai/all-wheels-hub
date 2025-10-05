@@ -26,7 +26,7 @@ export const LocationMapPicker = ({
   
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
-    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '',
+    googleMapsApiKey: 'AIzaSyCB-fLf_OBqt6Y-zivznCupmZV6iB1HGzg',
   });
 
   const handleGetCurrentLocation = () => {
