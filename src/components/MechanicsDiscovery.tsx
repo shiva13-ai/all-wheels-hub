@@ -173,7 +173,12 @@ export const MechanicsDiscovery = () => {
           isOpen={!!selectedMechanic}
           onClose={() => setSelectedMechanic(null)}
           vehicleType="car"
-          services={[]}
+          services={[
+            { name: "AC Service", price: 1500 },
+            { name: "Towing", price: 800 },
+            { name: "Engine Diagnostics", price: 1200 },
+            { name: "Brake Service", price: 1800 }
+          ]}
           preSelectedMechanicId={selectedMechanic}
         />
       )}

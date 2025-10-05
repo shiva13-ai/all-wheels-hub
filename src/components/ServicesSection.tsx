@@ -6,31 +6,51 @@ import { Bike, Car, Truck, Zap } from "lucide-react";
 export const ServicesSection = () => {
   const [selectedService, setSelectedService] = useState<{
     vehicleType: 'bicycle' | 'bike' | 'car' | 'truck';
-    services: string[];
+    services: Array<{ name: string; price: number }>;
   } | null>(null);
   const vehicleServices = [
     {
       title: "Bicycle Services",
       icon: Bike,
-      services: ["Puncture Repair", "Brake Fix", "Chain Repair", "Gear Adjustment"],
+      services: [
+        { name: "Puncture Repair", price: 50 },
+        { name: "Brake Fix", price: 150 },
+        { name: "Chain Repair", price: 100 },
+        { name: "Gear Adjustment", price: 120 }
+      ],
       emergencyAvailable: true,
     },
     {
       title: "Bike Services", 
       icon: Zap,
-      services: ["Oil Change", "Tyre Replacement", "Engine Tuning", "Battery Service"],
+      services: [
+        { name: "Oil Change", price: 300 },
+        { name: "Tyre Replacement", price: 800 },
+        { name: "Engine Tuning", price: 1500 },
+        { name: "Battery Service", price: 500 }
+      ],
       emergencyAvailable: true,
     },
     {
       title: "Auto Services",
       icon: Truck,
-      services: ["Engine Repair", "Transmission", "AC Service", "Electrical Work"],
+      services: [
+        { name: "Engine Repair", price: 2500 },
+        { name: "Transmission", price: 3500 },
+        { name: "AC Service", price: 1200 },
+        { name: "Electrical Work", price: 1000 }
+      ],
       emergencyAvailable: true,
     },
     {
       title: "Car Services",
       icon: Car,
-      services: ["AC Service", "Towing", "Engine Diagnostics", "Brake Service"],
+      services: [
+        { name: "AC Service", price: 1500 },
+        { name: "Towing", price: 800 },
+        { name: "Engine Diagnostics", price: 1200 },
+        { name: "Brake Service", price: 1800 }
+      ],
       emergencyAvailable: true,
     },
   ];
@@ -53,7 +73,7 @@ export const ServicesSection = () => {
               key={index}
               title={service.title}
               icon={service.icon}
-              services={service.services}
+              services={service.services.map(s => s.name)}
               emergencyAvailable={service.emergencyAvailable}
               onClick={() => setSelectedService({
                 vehicleType: service.title.toLowerCase().includes('bicycle') ? 'bicycle' :

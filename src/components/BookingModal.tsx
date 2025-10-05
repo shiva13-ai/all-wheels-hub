@@ -16,7 +16,7 @@ interface BookingModalProps {
   isOpen: boolean;
   onClose: () => void;
   vehicleType: 'bicycle' | 'bike' | 'car' | 'truck';
-  services: string[];
+  services: Array<{ name: string; price: number }>;
   preSelectedMechanicId?: string;
 }
 
@@ -106,12 +106,19 @@ export const BookingModal = ({ isOpen, onClose, vehicleType, services, preSelect
               </SelectTrigger>
               <SelectContent>
                 {services.map((service) => (
-                  <SelectItem key={service} value={service}>
-                    {service}
+                  <SelectItem key={service.name} value={service.name}>
+                    {service.name} - ₹{service.price}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {formData.service_type && (
+              <div className="mt-2 p-3 bg-muted rounded-md">
+                <p className="text-sm font-medium">
+                  Service Fare: <span className="text-lg text-primary">₹{services.find(s => s.name === formData.service_type)?.price}</span>
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">
