@@ -41,10 +41,18 @@ export const LocationMapPicker = ({
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const newPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        console.log('Detected location:', newPos, 'Accuracy:', pos.coords.accuracy, 'meters');
+        const accuracy = Math.round(pos.coords.accuracy);
+        console.log('Detected location:', newPos, 'Accuracy:', accuracy, 'meters');
         setPosition(newPos);
         setMapCenter(newPos);
-        toast.success(`Location detected! (±${Math.round(pos.coords.accuracy)}m accuracy)`);
+        
+        if (accuracy > 1000) {
+          toast.warning(`Location may be inaccurate (±${accuracy}m). Please verify on map or click to select your exact location.`, {
+            duration: 5000
+          });
+        } else {
+          toast.success(`Location detected! (±${accuracy}m accuracy)`);
+        }
         setIsGettingLocation(false);
       },
       (error) => {
