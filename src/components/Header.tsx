@@ -75,8 +75,8 @@ export const Header = () => {
               </Button>
             )}
             
-            <Button variant="hero">
-              Join as Mechanic
+            <Button variant="hero" onClick={() => navigate('/mechanic-dashboard')}>
+              {profile?.role === 'mechanic' ? 'Dashboard' : 'Join as Mechanic'}
             </Button>
             
             <Button variant="ghost" size="icon" className="md:hidden">

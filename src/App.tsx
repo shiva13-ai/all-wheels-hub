@@ -7,6 +7,8 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Chat from "./pages/Chat";
+import MechanicDashboard from "./pages/MechanicDashboard";
+import Tracking from "./pages/Tracking";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -22,6 +24,8 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/chat" element={<Chat />} />
+            <Route path="/mechanic-dashboard" element={<MechanicDashboard />} />
+            <Route path="/tracking/:bookingId" element={<Tracking />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

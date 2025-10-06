@@ -5,10 +5,11 @@ import { ServicesSection } from "@/components/ServicesSection";
 import { FeaturesSection } from "@/components/FeaturesSection";
 import { Footer } from "@/components/Footer";
 import { SOSButton } from "@/components/SOSButton";
+import { ActiveBookings } from "@/components/ActiveBookings";
 import { useAuth } from "@/contexts/AuthContext";
 
 const Index = () => {
-  const { loading } = useAuth();
+  const { user, loading } = useAuth();
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
@@ -18,6 +19,7 @@ const Index = () => {
     <div className="min-h-screen bg-background">
       <Header />
       <HeroSection />
+      {user && <ActiveBookings />}
       <MechanicsDiscovery />
       <ServicesSection />
       <FeaturesSection />

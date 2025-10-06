@@ -26,7 +26,6 @@ export const BookingModal = ({ isOpen, onClose, vehicleType, services, preSelect
     vehicle_type: vehicleType,
     description: '',
     location: '',
-    scheduled_date: '',
     mechanic_id: preSelectedMechanicId,
     latitude: undefined,
     longitude: undefined,
@@ -60,8 +59,8 @@ export const BookingModal = ({ isOpen, onClose, vehicleType, services, preSelect
       }
       
       toast({
-        title: 'Booking created!',
-        description: 'Your service request has been submitted successfully.',
+        title: 'Request sent!',
+        description: 'Nearby mechanics have been notified. You\'ll be notified when a mechanic accepts.',
       });
       
       onClose();
@@ -70,7 +69,6 @@ export const BookingModal = ({ isOpen, onClose, vehicleType, services, preSelect
         vehicle_type: vehicleType,
         description: '',
         location: '',
-        scheduled_date: '',
       });
     } catch (error: any) {
       toast({
@@ -87,9 +85,9 @@ export const BookingModal = ({ isOpen, onClose, vehicleType, services, preSelect
     <Dialog open={isOpen} onOpenChange={() => onClose()}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Book {vehicleType} Service</DialogTitle>
+          <DialogTitle>Request {vehicleType} Service</DialogTitle>
           <DialogDescription>
-            Fill out the details for your service request
+            Send a request to nearby available mechanics
           </DialogDescription>
         </DialogHeader>
         
@@ -148,16 +146,6 @@ export const BookingModal = ({ isOpen, onClose, vehicleType, services, preSelect
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="scheduled_date">Preferred Date & Time</Label>
-            <Input
-              id="scheduled_date"
-              type="datetime-local"
-              value={formData.scheduled_date}
-              onChange={(e) => setFormData({ ...formData, scheduled_date: e.target.value })}
-            />
-          </div>
-
-          <div className="space-y-2">
             <Label htmlFor="description">Description (Optional)</Label>
             <Textarea
               id="description"
@@ -173,7 +161,7 @@ export const BookingModal = ({ isOpen, onClose, vehicleType, services, preSelect
               Cancel
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading ? 'Booking...' : 'Book Service'}
+              {loading ? 'Sending Request...' : 'Send Request'}
             </Button>
           </div>
         </form>
