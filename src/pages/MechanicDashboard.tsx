@@ -9,6 +9,8 @@ import { useToast } from "@/hooks/use-toast";
 import { MapPin, Clock, Car, CheckCircle, XCircle } from "lucide-react";
 import { GoogleMap, LoadScript, Marker } from "@react-google-maps/api";
 
+// NOTE: We alias the fetched profile data explicitly to 'customer_profile' and 
+// specify the foreign key constraint to avoid the "couldn't find relationship" error.
 interface Booking {
   id: string;
   user_id: string;
@@ -20,13 +22,14 @@ interface Booking {
   longitude: number | null;
   created_at: string;
   status: string;
-  profiles: {
+  // Renamed to 'customer_profile' here to match the alias in the select query.
+  customer_profile: {
     full_name: string;
     phone: string;
   } | null;
 }
 
-const GOOGLE_MAPS_API_KEY = "AIzaSyDGSRDc8SQYqmJZwFNAUTb5E5AEeGxw9OQ";
+const GOOGLE_MAPS_API_KEY = "AIzaSyANlH9ZOTkQ_xWPIBuDY-Ay0GuiQ1HY3kU";
 
 export default function MechanicDashboard() {
   const { user, profile } = useAuth();
@@ -62,7 +65,7 @@ export default function MechanicDashboard() {
         .from("bookings")
         .select(`
           *,
-          profiles:user_id (full_name, phone)
+          customer_profile:profiles!user_id (full_name, phone)
         `)
         .eq("status", "pending")
         .order("created_at", { ascending: false });
@@ -72,10 +75,12 @@ export default function MechanicDashboard() {
       // Transform the data to match our interface
       const transformedData = (data || []).map((booking: any) => ({
         ...booking,
-        profiles: Array.isArray(booking.profiles) ? booking.profiles[0] : booking.profiles
+        // Use the explicit alias 'customer_profile'
+        customer_profile: Array.isArray(booking.customer_profile) ? booking.customer_profile[0] : booking.customer_profile
       }));
       
-      setRequests(transformedData);
+      // We need to cast the result to the expected Booking[] interface
+      setRequests(transformedData as Booking[]);
 
       // Set map center to first request location if available
       if (transformedData && transformedData.length > 0 && transformedData[0].latitude && transformedData[0].longitude) {
@@ -86,10 +91,11 @@ export default function MechanicDashboard() {
       }
     } catch (error: any) {
       toast({
-        title: "Error",
+        title: "Error fetching requests",
         description: error.message,
         variant: "destructive",
       });
+      console.error("Supabase Query Error:", error);
     } finally {
       setLoading(false);
     }
@@ -235,9 +241,10 @@ export default function MechanicDashboard() {
                       <div>
                         <p className="font-medium">Customer</p>
                         <p className="text-sm text-muted-foreground">
-                          {request.profiles?.full_name || "User"}
+                          {/* Use the new alias customer_profile */}
+                          {request.customer_profile?.full_name || "User"}
                         </p>
-                        <p className="text-sm text-muted-foreground">{request.profiles?.phone}</p>
+                        <p className="text-sm text-muted-foreground">{request.customer_profile?.phone}</p>
                       </div>
                     </div>
 
@@ -276,6 +283,8 @@ export default function MechanicDashboard() {
                   <CardTitle>Request Locations</CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
+                    {/* The Google Maps component requires a specific API key variable that is expected to be present. 
+                        If the map fails to load, ensure you have set the GOOGLE_MAPS_API_KEY environment variable. */}
                   <LoadScript googleMapsApiKey={GOOGLE_MAPS_API_KEY}>
                     <GoogleMap
                       mapContainerStyle={{ width: "100%", height: "520px" }}
@@ -291,7 +300,8 @@ export default function MechanicDashboard() {
                               lat: request.latitude!,
                               lng: request.longitude!,
                             }}
-                            title={`${request.service_type} - ${request.profiles?.full_name}`}
+                            // Use the new alias customer_profile
+                            title={`${request.service_type} - ${request.customer_profile?.full_name}`}
                           />
                         ))}
                     </GoogleMap>
@@ -305,3 +315,4 @@ export default function MechanicDashboard() {
     </div>
   );
 }
+
