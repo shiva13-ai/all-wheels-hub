@@ -1,15 +1,16 @@
 import { useEffect, useState } from "react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "../contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
-import { Header } from "@/components/Header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
+import { supabase } from "../integrations/supabase/client";
+import { Header } from "../components/Header";
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Button } from "../components/ui/button";
+import { useToast } from "../hooks/use-toast";
 import { MapPin, Clock, Car, CheckCircle, XCircle } from "lucide-react";
 import { GoogleMap, LoadScript, Marker } from "@react-google-maps/api";
+import { getDistance } from "../lib/utils";
 
-// NOTE: We alias the fetched profile data explicitly to 'customer_profile' and 
+// NOTE: We alias the fetched profile data explicitly to 'customer_profile' and
 // specify the foreign key constraint to avoid the "couldn't find relationship" error.
 interface Booking {
   id: string;
@@ -30,14 +31,17 @@ interface Booking {
 }
 
 const GOOGLE_MAPS_API_KEY = "AIzaSyANlH9ZOTkQ_xWPIBuDY-Ay0GuiQ1HY3kU";
+const NEARBY_RADIUS_KM = 50; // 50km radius for nearby requests
 
 export default function MechanicDashboard() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [requests, setRequests] = useState<Booking[]>([]);
+  const [filteredRequests, setFilteredRequests] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [mapCenter, setMapCenter] = useState({ lat: 17.385, lng: 78.4867 });
+  const [mechanicLocation, setMechanicLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -55,9 +59,65 @@ export default function MechanicDashboard() {
       return;
     }
 
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setMechanicLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          });
+        },
+        (error) => {
+          console.error("Error getting mechanic location: ", error);
+          toast({
+            title: "Could not get your location",
+            description: "Showing all requests. Please enable location services for better results.",
+            variant: "destructive"
+          });
+        }
+      );
+    }
+
     fetchPendingRequests();
-    subscribeToRequests();
-  }, [user, profile]);
+    const subscription = subscribeToRequests();
+
+    return () => {
+      if (subscription) {
+        supabase.removeChannel(subscription);
+      }
+    };
+  }, [user, profile, navigate, toast]);
+
+  useEffect(() => {
+    if (mechanicLocation && requests.length > 0) {
+      const nearby = requests.filter(request => {
+        if (request.latitude && request.longitude) {
+          const distance = getDistance(
+            mechanicLocation.lat,
+            mechanicLocation.lng,
+            request.latitude,
+            request.longitude
+          );
+          return distance <= NEARBY_RADIUS_KM;
+        }
+        return false;
+      });
+      setFilteredRequests(nearby);
+      if (nearby.length > 0 && nearby[0].latitude && nearby[0].longitude) {
+        setMapCenter({ lat: nearby[0].latitude, lng: nearby[0].longitude });
+      } else if (requests.length > 0 && requests[0].latitude && requests[0].longitude) {
+        setMapCenter({ lat: requests[0].latitude, lng: requests[0].longitude });
+      }
+    } else {
+      setFilteredRequests(requests);
+       if (requests.length > 0 && requests[0].latitude && requests[0].longitude) {
+        setMapCenter({
+          lat: requests[0].latitude,
+          lng: requests[0].longitude,
+        });
+      }
+    }
+  }, [requests, mechanicLocation]);
 
   const fetchPendingRequests = async () => {
     try {
@@ -71,24 +131,14 @@ export default function MechanicDashboard() {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      
-      // Transform the data to match our interface
+
       const transformedData = (data || []).map((booking: any) => ({
         ...booking,
-        // Use the explicit alias 'customer_profile'
         customer_profile: Array.isArray(booking.customer_profile) ? booking.customer_profile[0] : booking.customer_profile
       }));
-      
-      // We need to cast the result to the expected Booking[] interface
+
       setRequests(transformedData as Booking[]);
 
-      // Set map center to first request location if available
-      if (transformedData && transformedData.length > 0 && transformedData[0].latitude && transformedData[0].longitude) {
-        setMapCenter({
-          lat: transformedData[0].latitude,
-          lng: transformedData[0].longitude,
-        });
-      }
     } catch (error: any) {
       toast({
         title: "Error fetching requests",
@@ -110,7 +160,6 @@ export default function MechanicDashboard() {
           event: "*",
           schema: "public",
           table: "bookings",
-          filter: "status=eq.pending",
         },
         () => {
           fetchPendingRequests();
@@ -118,14 +167,11 @@ export default function MechanicDashboard() {
       )
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return channel;
   };
 
   const handleAcceptRequest = async (bookingId: string) => {
     try {
-      // Get current location
       if ("geolocation" in navigator) {
         navigator.geolocation.getCurrentPosition(
           async (position) => {
@@ -174,14 +220,17 @@ export default function MechanicDashboard() {
       const { error } = await supabase
         .from("bookings")
         .update({ status: "rejected" })
-        .eq("id", bookingId);
+        .eq("id", bookingId)
+        .eq("status", "pending"); // Explicitly check that we're only updating a pending request
 
       if (error) throw error;
 
       toast({
         title: "Request Rejected",
-        description: "The request has been rejected.",
+        description: "The request has been removed from your dashboard.",
       });
+      // Manually remove the request from the local state for a faster UI update
+      setRequests((prevRequests) => prevRequests.filter((req) => req.id !== bookingId));
     } catch (error: any) {
       toast({
         title: "Error",
@@ -203,19 +252,19 @@ export default function MechanicDashboard() {
     <div className="min-h-screen bg-background">
       <Header />
       <div className="container mx-auto px-4 py-8 mt-20">
-        <h1 className="text-3xl font-bold mb-6">Service Requests</h1>
+        <h1 className="text-3xl font-bold mb-6">Nearby Service Requests</h1>
 
-        {requests.length === 0 ? (
+        {filteredRequests.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center">
               <Car className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-muted-foreground">No pending requests at the moment.</p>
+              <p className="text-muted-foreground">No nearby pending requests at the moment.</p>
             </CardContent>
           </Card>
         ) : (
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="space-y-4">
-              {requests.map((request) => (
+              {filteredRequests.map((request) => (
                 <Card key={request.id}>
                   <CardHeader>
                     <CardTitle className="flex items-center justify-between">
@@ -241,7 +290,6 @@ export default function MechanicDashboard() {
                       <div>
                         <p className="font-medium">Customer</p>
                         <p className="text-sm text-muted-foreground">
-                          {/* Use the new alias customer_profile */}
                           {request.customer_profile?.full_name || "User"}
                         </p>
                         <p className="text-sm text-muted-foreground">{request.customer_profile?.phone}</p>
@@ -291,7 +339,7 @@ export default function MechanicDashboard() {
                       center={mapCenter}
                       zoom={12}
                     >
-                      {requests
+                      {filteredRequests
                         .filter((r) => r.latitude && r.longitude)
                         .map((request) => (
                           <Marker
@@ -300,7 +348,6 @@ export default function MechanicDashboard() {
                               lat: request.latitude!,
                               lng: request.longitude!,
                             }}
-                            // Use the new alias customer_profile
                             title={`${request.service_type} - ${request.customer_profile?.full_name}`}
                           />
                         ))}
