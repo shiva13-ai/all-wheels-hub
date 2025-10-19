@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { GoogleMap, Marker, InfoWindow, useJsApiLoader } from '@react-google-maps/api';
-import { supabase } from '@/integrations/supabase/client';
+import React, { useEffect, useState, useRef } from 'react';
+// Use relative path to avoid alias issues
+import { supabase } from '../integrations/supabase/client';
 import { Card } from '@/components/ui/card';
 import { Loader2, MapPin, User } from 'lucide-react';
 
@@ -8,6 +8,51 @@ const mapContainerStyle = {
   width: '100%',
   height: '100%'
 };
+
+// --- Helper hook to load the Google Maps script ---
+const useGoogleMapsScript = (apiKey: string) => {
+    const [isLoaded, setIsLoaded] = useState(window.google && window.google.maps);
+    const [error, setError] = useState<Error | null>(null);
+
+    useEffect(() => {
+        if (isLoaded) return;
+
+        const existingScript = document.getElementById('google-maps-script');
+        if (existingScript) {
+            setIsLoaded(true);
+            return;
+        }
+
+        const script = document.createElement('script');
+        script.id = 'google-maps-script';
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}`;
+        script.async = true;
+        script.defer = true;
+        
+        script.onload = () => {
+            setIsLoaded(true);
+        };
+        
+        script.onerror = () => {
+            setError(new Error('Google Maps script could not be loaded.'));
+        };
+
+        document.head.appendChild(script);
+
+        return () => {
+            const scriptTag = document.getElementById('google-maps-script');
+            if (scriptTag) {
+                // In some strict environments, you might not want to remove it 
+                // if it could be used by other components.
+                // document.head.removeChild(scriptTag);
+            }
+        };
+    }, [isLoaded, apiKey]);
+
+    return { isLoaded, error };
+};
+// --- End of helper hook ---
+
 
 interface LiveLocationMapProps {
   bookingId?: string;
@@ -31,12 +76,14 @@ const LiveLocationMap: React.FC<LiveLocationMapProps> = ({
   const [locationData, setLocationData] = useState<LocationData>({});
   const [loading, setLoading] = useState(true);
   const [currentPosition, setCurrentPosition] = useState<{ lat: number; lng: number } | null>(null);
-  const [selectedMarker, setSelectedMarker] = useState<'user' | 'mechanic' | null>(null);
+  const [map, setMap] = useState<google.maps.Map | null>(null);
+  const [userMarker, setUserMarker] = useState<google.maps.Marker | null>(null);
+  const [mechanicMarker, setMechanicMarker] = useState<google.maps.Marker | null>(null);
+  const [infoWindow, setInfoWindow] = useState<google.maps.InfoWindow | null>(null);
+
+  const mapRef = useRef<HTMLDivElement>(null);
   
-  const { isLoaded } = useJsApiLoader({
-    id: 'google-map-script',
-    googleMapsApiKey: 'AIzaSyCB-fLf_OBqt6Y-zivznCupmZV6iB1HGzg',
-  });
+  const { isLoaded, error: scriptError } = useGoogleMapsScript(import.meta.env.VITE_GOOGLE_MAPS_API_KEY);
 
   // Get current position
   useEffect(() => {
@@ -58,12 +105,31 @@ const LiveLocationMap: React.FC<LiveLocationMapProps> = ({
     }
   }, []);
 
+  // Initialize Map
+  useEffect(() => {
+    if (isLoaded && mapRef.current && !map) {
+      const newMap = new window.google.maps.Map(mapRef.current, {
+        center: currentPosition || { lat: 28.6139, lng: 77.2090 },
+        zoom: 13,
+        mapTypeControl: false,
+        streetViewControl: false,
+      });
+      setMap(newMap);
+      setInfoWindow(new window.google.maps.InfoWindow());
+    }
+  }, [isLoaded, map, currentPosition]);
+
   // Fetch initial location data
   useEffect(() => {
     const fetchLocationData = async () => {
       try {
         const table = bookingId ? 'bookings' : 'sos_requests';
         const id = bookingId || sosRequestId;
+
+        if(!id) {
+            setLoading(false);
+            return;
+        }
 
         const { data, error } = await supabase
           .from(table)
@@ -96,6 +162,8 @@ const LiveLocationMap: React.FC<LiveLocationMapProps> = ({
   useEffect(() => {
     const table = bookingId ? 'bookings' : 'sos_requests';
     const id = bookingId || sosRequestId;
+
+    if(!id) return;
 
     const channel = supabase
       .channel(`location-${id}`)
@@ -132,6 +200,7 @@ const LiveLocationMap: React.FC<LiveLocationMapProps> = ({
     const updateLocation = async () => {
       const table = bookingId ? 'bookings' : 'sos_requests';
       const id = bookingId || sosRequestId;
+      if (!id) return;
 
       await supabase
         .from(table)
@@ -143,80 +212,109 @@ const LiveLocationMap: React.FC<LiveLocationMapProps> = ({
         .eq('id', id);
     };
 
-    // Update location every 10 seconds
     const interval = setInterval(updateLocation, 10000);
     updateLocation(); // Update immediately
 
     return () => clearInterval(interval);
   }, [userRole, currentPosition, bookingId, sosRequestId]);
 
-  if (loading || !currentPosition || !isLoaded) {
+  // Update Markers and InfoWindows
+  useEffect(() => {
+    if (!map || !infoWindow) return;
+
+    const userPos = locationData.userLat && locationData.userLng ? { lat: locationData.userLat, lng: locationData.userLng } : null;
+    const mechanicPos = locationData.mechanicLat && locationData.mechanicLng ? { lat: locationData.mechanicLat, lng: locationData.mechanicLng } : null;
+    
+    // Update or create User Marker
+    if(userPos) {
+        if(!userMarker) {
+            const marker = new window.google.maps.Marker({
+                position: userPos,
+                map,
+                label: 'U',
+                title: 'User Location'
+            });
+            marker.addListener('click', () => {
+                infoWindow.setContent(`
+                    <div class="flex items-center gap-2 p-1 font-sans">
+                        <div class="font-semibold">User Location</div>
+                    </div>
+                `);
+                infoWindow.open(map, marker);
+            });
+            setUserMarker(marker);
+        } else {
+            userMarker.setPosition(userPos);
+        }
+    } else if(userMarker) {
+        userMarker.setMap(null);
+        setUserMarker(null);
+    }
+    
+    // Update or create Mechanic Marker
+    if(mechanicPos) {
+        if(!mechanicMarker) {
+            const marker = new window.google.maps.Marker({
+                position: mechanicPos,
+                map,
+                label: 'M',
+                title: 'Mechanic Location',
+                icon: 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png'
+            });
+             marker.addListener('click', () => {
+                infoWindow.setContent(`
+                    <div class="flex items-center gap-2 p-1 font-sans">
+                        <div class="font-semibold">Mechanic Location</div>
+                    </div>
+                `);
+                infoWindow.open(map, marker);
+            });
+            setMechanicMarker(marker);
+        } else {
+            mechanicMarker.setPosition(mechanicPos);
+        }
+    } else if(mechanicMarker) {
+        mechanicMarker.setMap(null);
+        setMechanicMarker(null);
+    }
+
+    // Center map
+    const bounds = new window.google.maps.LatLngBounds();
+    let hasPoints = false;
+    if (userPos) { bounds.extend(userPos); hasPoints = true; }
+    if (mechanicPos) { bounds.extend(mechanicPos); hasPoints = true; }
+
+    if (hasPoints) {
+        if (bounds.getNorthEast().equals(bounds.getSouthWest())) {
+            map.setCenter(bounds.getCenter());
+            map.setZoom(15);
+        } else {
+            map.fitBounds(bounds);
+        }
+    } else if (currentPosition) {
+        map.setCenter(currentPosition);
+    }
+
+  }, [map, infoWindow, locationData, currentPosition]);
+
+
+  if (loading || !currentPosition || scriptError) {
     return (
       <Card className="flex items-center justify-center h-96 bg-card">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        {scriptError ? 
+            <p className="text-destructive text-sm p-4">Error loading map. Please check your API key and internet connection.</p> :
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        }
       </Card>
     );
   }
 
-  const mapCenter = 
-    (userRole === 'user' && locationData.mechanicLat && locationData.mechanicLng)
-      ? { lat: locationData.mechanicLat, lng: locationData.mechanicLng }
-      : (locationData.userLat && locationData.userLng)
-      ? { lat: locationData.userLat, lng: locationData.userLng }
-      : currentPosition;
-
   return (
     <Card className="overflow-hidden h-96 bg-card">
-      <GoogleMap
-        mapContainerStyle={mapContainerStyle}
-        center={mapCenter}
-        zoom={13}
-      >
-        {/* User Location Marker */}
-        {locationData.userLat && locationData.userLng && (
-          <Marker 
-            position={{ lat: locationData.userLat, lng: locationData.userLng }}
-            onClick={() => setSelectedMarker('user')}
-          >
-            {selectedMarker === 'user' && (
-              <InfoWindow onCloseClick={() => setSelectedMarker(null)}>
-                <div className="flex items-center gap-2 p-1">
-                  <User className="w-4 h-4" />
-                  <div>
-                    <p className="font-semibold">User Location</p>
-                    <p className="text-sm text-muted-foreground">{locationData.location}</p>
-                  </div>
-                </div>
-              </InfoWindow>
-            )}
-          </Marker>
-        )}
-
-        {/* Mechanic Location Marker */}
-        {locationData.mechanicLat && locationData.mechanicLng && (
-          <Marker 
-            position={{ lat: locationData.mechanicLat, lng: locationData.mechanicLng }}
-            onClick={() => setSelectedMarker('mechanic')}
-            icon={{
-              url: 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png'
-            }}
-          >
-            {selectedMarker === 'mechanic' && (
-              <InfoWindow onCloseClick={() => setSelectedMarker(null)}>
-                <div className="flex items-center gap-2 p-1">
-                  <MapPin className="w-4 h-4 text-primary" />
-                  <div>
-                    <p className="font-semibold">Mechanic Location</p>
-                    <p className="text-sm text-muted-foreground">Live tracking</p>
-                  </div>
-                </div>
-              </InfoWindow>
-            )}
-          </Marker>
-        )}
-      </GoogleMap>
+        <div ref={mapRef} style={mapContainerStyle} />
     </Card>
   );
 };
 
 export default LiveLocationMap;
+
