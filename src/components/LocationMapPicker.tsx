@@ -1,13 +1,65 @@
-import { useState } from 'react';
-import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
-import { Button } from './ui/button';
-import { MapPin, Navigation } from 'lucide-react';
-import { toast } from 'sonner';
+import React, { useState, useEffect, useRef } from 'react';
+import { Button } from "@/components/ui/button";
+import { MapPin, Navigation } from "lucide-react";
+import { toast } from "sonner";
+
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
 const mapContainerStyle = {
   width: '100%',
   height: '100%'
 };
+
+// --- Helper hook to load the Google Maps script ---
+const useGoogleMapsScript = (apiKey: string) => {
+    const [isLoaded, setIsLoaded] = useState(!!(window.google && window.google.maps));
+    const [error, setError] = useState<Error | null>(null);
+
+    useEffect(() => {
+        if (isLoaded) return;
+        
+        if (!apiKey) {
+            const err = new Error('Google Maps API key is missing. Please set VITE_GOOGLE_MAPS_API_KEY in your .env file.');
+            setError(err);
+            console.error(err);
+            toast.error(err.message);
+            return;
+        }
+
+        const existingScript = document.getElementById('google-maps-script');
+        if (existingScript) {
+            const checkReady = () => {
+                if (window.google && window.google.maps) {
+                    setIsLoaded(true);
+                } else {
+                    setTimeout(checkReady, 100);
+                }
+            };
+            checkReady();
+            return;
+        }
+
+        const script = document.createElement('script');
+        script.id = 'google-maps-script';
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+        script.async = true;
+        script.defer = true;
+        
+        script.onload = () => setIsLoaded(true);
+
+        script.onerror = () => {
+            const err = new Error('Google Maps script could not be loaded.');
+            setError(err);
+            toast.error(err.message);
+        };
+
+        document.head.appendChild(script);
+
+    }, [isLoaded, apiKey]);
+
+    return { isLoaded, error };
+};
+
 
 interface LocationMapPickerProps {
   onLocationSelect: (location: string, latitude: number, longitude: number) => void;
@@ -17,17 +69,52 @@ interface LocationMapPickerProps {
 
 export const LocationMapPicker = ({ 
   onLocationSelect, 
-  initialLat = 28.6139, 
-  initialLng = 77.2090 
+  initialLat = 17.3850, // Hyderabad
+  initialLng = 78.4867 
 }: LocationMapPickerProps) => {
   const [position, setPosition] = useState<{ lat: number; lng: number } | null>(null);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
-  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number }>({ lat: initialLat, lng: initialLng });
   
-  const { isLoaded } = useJsApiLoader({
-    id: 'google-map-script',
-    googleMapsApiKey: 'AIzaSyCB-fLf_OBqt6Y-zivznCupmZV6iB1HGzg',
-  });
+  const mapRef = useRef<HTMLDivElement>(null);
+  const [map, setMap] = useState<google.maps.Map | null>(null);
+  const [marker, setMarker] = useState<google.maps.Marker | null>(null);
+
+  const { isLoaded, error: scriptError } = useGoogleMapsScript(GOOGLE_MAPS_API_KEY);
+
+  useEffect(() => {
+    if (isLoaded && mapRef.current && !map) {
+      const newMap = new window.google.maps.Map(mapRef.current, {
+        center: { lat: initialLat, lng: initialLng },
+        zoom: 13,
+        mapTypeControl: false,
+        streetViewControl: false,
+      });
+
+      newMap.addListener('click', (e: google.maps.MapMouseEvent) => {
+        if (e.latLng) {
+            setPosition({ lat: e.latLng.lat(), lng: e.latLng.lng() });
+        }
+      });
+      setMap(newMap);
+    }
+  }, [isLoaded, map, initialLat, initialLng]);
+  
+  useEffect(() => {
+      if (map && position) {
+          if (!marker) {
+              const newMarker = new window.google.maps.Marker({
+                  position,
+                  map,
+              });
+              setMarker(newMarker);
+          } else {
+              marker.setPosition(position);
+          }
+          map.panTo(position);
+          map.setZoom(15);
+      }
+  }, [map, position, marker]);
+
 
   const handleGetCurrentLocation = () => {
     setIsGettingLocation(true);
@@ -42,9 +129,11 @@ export const LocationMapPicker = ({
       (pos) => {
         const newPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         const accuracy = Math.round(pos.coords.accuracy);
-        console.log('Detected location:', newPos, 'Accuracy:', accuracy, 'meters');
         setPosition(newPos);
-        setMapCenter(newPos);
+        if(map) {
+            map.setCenter(newPos);
+            map.setZoom(15);
+        }
         
         if (accuracy > 1000) {
           toast.warning(`Location may be inaccurate (±${accuracy}m). Please verify on map or click to select your exact location.`, {
@@ -69,21 +158,25 @@ export const LocationMapPicker = ({
   };
 
   const handleConfirmLocation = async () => {
-    if (!position) {
+    if (!position || !window.google) {
       toast.error("Please select a location on the map");
       return;
     }
 
     try {
-      // Use reverse geocoding to get address
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?lat=${position.lat}&lon=${position.lng}&format=json`
-      );
-      const data = await response.json();
-      const address = data.display_name || `${position.lat.toFixed(6)}, ${position.lng.toFixed(6)}`;
-      
-      onLocationSelect(address, position.lat, position.lng);
-      toast.success("Location confirmed!");
+      // Use Google's reverse geocoding to get address
+      const geocoder = new window.google.maps.Geocoder();
+      geocoder.geocode({ location: position }, (results, status) => {
+        if (status === 'OK' && results && results[0]) {
+           const address = results[0].formatted_address;
+           onLocationSelect(address, position.lat, position.lng);
+           toast.success("Location confirmed!");
+        } else {
+            toast.error("Failed to get location address.");
+             const fallbackAddress = `${position.lat.toFixed(6)}, ${position.lng.toFixed(6)}`;
+            onLocationSelect(fallbackAddress, position.lat, position.lng);
+        }
+      });
     } catch (error) {
       toast.error("Failed to get location address");
     }
@@ -97,7 +190,7 @@ export const LocationMapPicker = ({
           variant="outline"
           size="sm"
           onClick={handleGetCurrentLocation}
-          disabled={isGettingLocation}
+          disabled={isGettingLocation || !isLoaded}
           className="flex-1"
         >
           <Navigation className="w-4 h-4 mr-2" />
@@ -117,26 +210,12 @@ export const LocationMapPicker = ({
       </div>
 
       <div className="rounded-lg overflow-hidden border border-border h-[300px]">
-        {isLoaded ? (
-          <GoogleMap
-            mapContainerStyle={mapContainerStyle}
-            center={mapCenter}
-            zoom={position ? 15 : 13}
-            onClick={(e) => {
-              if (e.latLng) {
-                setPosition({
-                  lat: e.latLng.lat(),
-                  lng: e.latLng.lng()
-                });
-              }
-            }}
-          >
-            {position && <Marker position={position} />}
-          </GoogleMap>
-        ) : (
-          <div className="flex items-center justify-center h-full bg-muted">
-            Loading map...
+        {!isLoaded || scriptError ? (
+          <div className="flex items-center justify-center h-full bg-muted text-sm text-muted-foreground">
+            {scriptError ? scriptError.message : 'Loading map...'}
           </div>
+        ) : (
+          <div ref={mapRef} style={mapContainerStyle} />
         )}
       </div>
 
@@ -151,3 +230,4 @@ export const LocationMapPicker = ({
     </div>
   );
 };
+
