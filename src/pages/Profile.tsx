@@ -47,8 +47,8 @@ export default function Profile() {
       setPhone(profile.phone || '');
       if (profile.role === 'mechanic') {
         setLocation(profile.location || '');
-        setLat(profile.lat);
-        setLng(profile.lng);
+        setLat(profile.lat || undefined); // Use undefined if null for initial state
+        setLng(profile.lng || undefined); // Use undefined if null for initial state
         setExperienceYears(profile.experience_years || '');
         setServicesOffered(profile.services_offered || []);
         setIsAvailable(profile.is_available);
@@ -81,8 +81,8 @@ export default function Profile() {
 
       const mechanicUpdates = profile?.role === 'mechanic' ? {
         location,
-        lat: lat,
-        lng: lng,
+        latitude: lat, // Ensure correct column names used for Supabase
+        longitude: lng, // Ensure correct column names used for Supabase
         experience_years: Number(experienceYears) || 0,
         services_offered: servicesOffered,
         is_available: isAvailable,
@@ -127,7 +127,7 @@ export default function Profile() {
           </div>
 
           <form onSubmit={handleUpdateProfile}>
-            <Card>
+            <Card className="mb-6">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <User /> Personal Information
@@ -148,7 +148,7 @@ export default function Profile() {
 
             {profile.role === 'mechanic' && (
               <>
-                <Card>
+                <Card className="mb-6">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <Store /> Shop Details
@@ -174,6 +174,11 @@ export default function Profile() {
                           <Map className="h-4 w-4" />
                         </Button>
                       </div>
+                       {(lat !== undefined && lng !== undefined) && (
+                          <p className="text-xs text-muted-foreground">
+                            Coordinates: {lat.toFixed(6)}, {lng.toFixed(6)}
+                          </p>
+                        )}
                     </div>
                      <div className="space-y-2">
                       <Label htmlFor="experience">Years of Experience</Label>
@@ -195,7 +200,7 @@ export default function Profile() {
                   </CardContent>
                 </Card>
 
-                <Card>
+                <Card className="mb-6">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <Briefcase /> Services Offered
@@ -238,4 +243,3 @@ export default function Profile() {
     </div>
   );
 }
-
