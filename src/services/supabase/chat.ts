@@ -83,10 +83,10 @@ export const chatService = {
       return { data: null, error };
     }
 
-    // Filter to only show rooms where user is participant
+    // Filter to only show rooms where user is a participant and the booking is not cancelled
     const filtered = data?.filter((room: any) => {
       const booking = room.booking;
-      return booking && (booking.user_id === user.id || booking.mechanic_id === user.id);
+      return booking && (booking.user_id === user.id || booking.mechanic_id === user.id) && booking.status !== 'cancelled';
     });
 
     return { data: filtered, error: null };
@@ -207,3 +207,4 @@ export const chatService = {
     return channel;
   },
 };
+
