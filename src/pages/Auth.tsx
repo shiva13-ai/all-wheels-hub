@@ -1,22 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group';
 import { AlertCircle, Car, Wrench, User } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { authService } from '@/services/supabase/auth';
-import { useAuth } from '@/contexts/AuthContext';
-import { useToast } from '@/hooks/use-toast';
-import { MechanicRegistrationForm } from '@/components/MechanicRegistrationForm';
+import { Alert, AlertDescription } from '../components/ui/alert';
+import { authService } from '../services/supabase/auth';
+import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../hooks/use-toast';
+import { MechanicRegistrationForm } from '../components/MechanicRegistrationForm';
 
 const Auth = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
   const [userType, setUserType] = useState<'user' | 'mechanic'>('user');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -38,7 +39,7 @@ const Auth = () => {
     setError('');
 
     try {
-      const { data, error } = await authService.signUp(email, password, fullName);
+      const { data, error } = await authService.signUp(email, password, fullName, phone);
       if (error) {
         setError(error.message);
       } else {
@@ -55,6 +56,8 @@ const Auth = () => {
             title: 'Account created!',
             description: 'Please check your email to verify your account.',
           });
+          // For regular users, you might want to wait for verification or navigate them somewhere else
+           navigate('/');
         }
       }
     } catch (err: any) {
@@ -222,6 +225,16 @@ const Auth = () => {
                       type="text"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
+                      required
+                    />
+                  </div>
+                   <div className="space-y-2">
+                    <Label htmlFor="signup-phone">Phone Number</Label>
+                    <Input
+                      id="signup-phone"
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
                       required
                     />
                   </div>
