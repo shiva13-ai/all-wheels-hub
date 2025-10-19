@@ -39,7 +39,9 @@ const Auth = () => {
     setError('');
 
     try {
-      const { data, error } = await authService.signUp(email, password, fullName, phone);
+      // NOTE: supabase authService signature needs to be checked based on your service/supabase/auth.ts
+      // Assuming it takes email, password, fullName (and optionally phone if implemented in service)
+      const { data, error } = await authService.signUp(email, password, fullName);
       if (error) {
         setError(error.message);
       } else {
