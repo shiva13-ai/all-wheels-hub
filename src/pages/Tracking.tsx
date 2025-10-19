@@ -1,13 +1,46 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
-import { Header } from "@/components/Header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
-import { MapPin, Navigation, Phone } from "lucide-react";
-import { GoogleMap, LoadScript, Marker, Polyline } from "@react-google-maps/api";
+import { useAuth } from "../contexts/AuthContext";
+import { supabase } from "../integrations/supabase/client";
+import { Header } from "../components/Header";
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Button } from "../components/ui/button";
+import { useToast } from "../hooks/use-toast";
+import { MapPin, Navigation, Phone, Route } from "lucide-react";
+
+// --- Custom Hook to load Google Maps Script ---
+const useGoogleMapsScript = (apiKey: string) => {
+  const [isLoaded, setIsLoaded] = useState(false);
+  useEffect(() => {
+    const existingScript = document.getElementById('google-maps-script');
+
+    if (existingScript) {
+      setIsLoaded(true);
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.id = 'google-maps-script';
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=routes`;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => setIsLoaded(true);
+    script.onerror = () => console.error("Google Maps script failed to load.");
+    
+    document.head.appendChild(script);
+
+    return () => {
+      // Clean up script if component unmounts, though usually we want it to persist.
+      const scriptTag = document.getElementById('google-maps-script');
+      if (scriptTag) {
+        // document.head.removeChild(scriptTag);
+      }
+    };
+  }, [apiKey]);
+
+  return isLoaded;
+};
+
 
 interface BookingDetails {
   id: string;
@@ -32,7 +65,7 @@ interface BookingDetails {
   } | null;
 }
 
-const GOOGLE_MAPS_API_KEY = "AIzaSyDGSRDc8SQYqmJZwFNAUTb5E5AEeGxw9OQ";
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
 export default function Tracking() {
   const { bookingId } = useParams();
@@ -41,6 +74,15 @@ export default function Tracking() {
   const { toast } = useToast();
   const [booking, setBooking] = useState<BookingDetails | null>(null);
   const [loading, setLoading] = useState(true);
+  
+  const mapRef = useRef<HTMLDivElement>(null);
+  const mapInstance = useRef<google.maps.Map | null>(null);
+  const userMarker = useRef<google.maps.Marker | null>(null);
+  const mechanicMarker = useRef<google.maps.Marker | null>(null);
+  const directionsRenderer = useRef<google.maps.DirectionsRenderer | null>(null);
+
+  const isMapLoaded = useGoogleMapsScript(GOOGLE_MAPS_API_KEY);
+
 
   useEffect(() => {
     if (!user) {
@@ -49,18 +91,103 @@ export default function Tracking() {
     }
 
     fetchBookingDetails();
-    subscribeToBookingUpdates();
+    const subscription = subscribeToBookingUpdates();
 
     // Update mechanic location every 10 seconds if they're the mechanic
-    let locationInterval: NodeJS.Timeout;
+    let locationInterval: NodeJS.Timeout | undefined;
     if (profile?.role === "mechanic") {
       locationInterval = setInterval(updateMechanicLocation, 10000);
     }
 
     return () => {
       if (locationInterval) clearInterval(locationInterval);
+      if (subscription) supabase.removeChannel(subscription);
     };
   }, [bookingId, user, profile]);
+
+  // Effect for initializing the map once the script is loaded and we have data
+  useEffect(() => {
+    if (isMapLoaded && booking && mapRef.current && !mapInstance.current) {
+        const userLocation = booking.latitude && booking.longitude ? { lat: booking.latitude, lng: booking.longitude } : { lat: 17.385, lng: 78.4867 };
+        mapInstance.current = new window.google.maps.Map(mapRef.current, {
+            center: userLocation,
+            zoom: 14,
+        });
+
+        // Initialize the DirectionsRenderer
+        directionsRenderer.current = new window.google.maps.DirectionsRenderer({
+            map: mapInstance.current,
+            suppressMarkers: true, // We use our own markers
+            polylineOptions: {
+                strokeColor: '#2563eb',
+                strokeOpacity: 0.8,
+                strokeWeight: 5
+            }
+        });
+    }
+  }, [isMapLoaded, booking]);
+
+  // Effect for updating markers and polylines when booking data changes
+  useEffect(() => {
+    if (!mapInstance.current || !booking || !directionsRenderer.current) return;
+
+    const userPosition = booking.latitude && booking.longitude ? { lat: booking.latitude, lng: booking.longitude } : null;
+    const mechanicPosition = booking.mechanic_latitude && booking.mechanic_longitude ? { lat: booking.mechanic_latitude, lng: booking.mechanic_longitude } : null;
+
+    // Update user marker
+    if (userPosition) {
+        if (!userMarker.current) {
+            userMarker.current = new window.google.maps.Marker({
+                position: userPosition,
+                map: mapInstance.current,
+                label: 'U',
+                title: 'User Location'
+            });
+        } else {
+            userMarker.current.setPosition(userPosition);
+        }
+    }
+
+    // Update mechanic marker
+    if (mechanicPosition) {
+        if (!mechanicMarker.current) {
+            mechanicMarker.current = new window.google.maps.Marker({
+                position: mechanicPosition,
+                map: mapInstance.current,
+                label: 'M',
+                title: 'Mechanic Location',
+                icon: 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png'
+            });
+        } else {
+            mechanicMarker.current.setPosition(mechanicPosition);
+        }
+        // Pan map to mechanic if you are the user
+        if (profile?.role === 'user') {
+            mapInstance.current.panTo(mechanicPosition);
+        }
+    }
+    
+    // Calculate and display route
+    if (userPosition && mechanicPosition) {
+        const directionsService = new window.google.maps.DirectionsService();
+        directionsService.route(
+            {
+                origin: mechanicPosition,
+                destination: userPosition,
+                travelMode: window.google.maps.TravelMode.DRIVING,
+            },
+            (result, status) => {
+                if (status === window.google.maps.DirectionsStatus.OK && directionsRenderer.current) {
+                    directionsRenderer.current.setDirections(result);
+                } else {
+                    console.error(`error fetching directions ${result}`);
+                }
+            }
+        );
+    }
+
+  }, [booking, profile?.role]);
+
 
   const fetchBookingDetails = async () => {
     try {
@@ -97,7 +224,6 @@ export default function Tracking() {
         return;
       }
 
-      // Transform the data to match our interface
       const transformedData = {
         ...data,
         user_profile: Array.isArray(data.user_profile) ? data.user_profile[0] : data.user_profile,
@@ -133,9 +259,7 @@ export default function Tracking() {
       )
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return channel;
   };
 
   const updateMechanicLocation = () => {
@@ -198,11 +322,6 @@ export default function Tracking() {
     );
   }
 
-  const mapCenter = {
-    lat: booking.latitude || 17.385,
-    lng: booking.longitude || 78.4867,
-  };
-
   const isMechanic = profile?.role === "mechanic";
   const otherParty = isMechanic ? booking.user_profile : booking.mechanic_profile;
 
@@ -261,7 +380,7 @@ export default function Tracking() {
                   </Button>
                 </div>
 
-                {isMechanic && booking.status === "accepted" && (
+                {isMechanic && booking.status === "confirmed" && (
                   <Button onClick={handleCompleteService} className="w-full">
                     Mark as Completed
                   </Button>
@@ -279,61 +398,11 @@ export default function Tracking() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <LoadScript googleMapsApiKey={GOOGLE_MAPS_API_KEY}>
-                  <GoogleMap
-                    mapContainerStyle={{ width: "100%", height: "520px" }}
-                    center={mapCenter}
-                    zoom={14}
-                  >
-                    {/* User marker */}
-                    {booking.latitude && booking.longitude && (
-                      <Marker
-                        position={{
-                          lat: booking.latitude,
-                          lng: booking.longitude,
-                        }}
-                        label="U"
-                        title="User Location"
-                      />
-                    )}
-
-                    {/* Mechanic marker */}
-                    {booking.mechanic_latitude && booking.mechanic_longitude && (
-                      <Marker
-                        position={{
-                          lat: booking.mechanic_latitude,
-                          lng: booking.mechanic_longitude,
-                        }}
-                        label="M"
-                        title="Mechanic Location"
-                        icon={{
-                          url: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png",
-                        }}
-                      />
-                    )}
-
-                    {/* Line connecting both */}
-                    {booking.latitude &&
-                      booking.longitude &&
-                      booking.mechanic_latitude &&
-                      booking.mechanic_longitude && (
-                        <Polyline
-                          path={[
-                            { lat: booking.latitude, lng: booking.longitude },
-                            {
-                              lat: booking.mechanic_latitude,
-                              lng: booking.mechanic_longitude,
-                            },
-                          ]}
-                          options={{
-                            strokeColor: "#2563eb",
-                            strokeOpacity: 0.8,
-                            strokeWeight: 3,
-                          }}
-                        />
-                      )}
-                  </GoogleMap>
-                </LoadScript>
+                {isMapLoaded ? (
+                  <div ref={mapRef} style={{ width: "100%", height: "520px" }} />
+                ) : (
+                  <div className="flex items-center justify-center h-[520px]">Loading Map...</div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -342,3 +411,4 @@ export default function Tracking() {
     </div>
   );
 }
+
