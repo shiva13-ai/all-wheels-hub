@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
-import { useAuth } from "../contexts/AuthContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "../integrations/supabase/client";
-import { Header } from "../components/Header";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
-import { Button } from "../components/ui/button";
-import { useToast } from "../hooks/use-toast";
-import { MapPin, Clock, Car, CheckCircle, XCircle } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { Header } from "@/components/Header";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { MapPin, Clock, Car, CheckCircle, XCircle, Eye, History } from "lucide-react";
 import { GoogleMap, LoadScript, Marker } from "@react-google-maps/api";
-import { getDistance } from "../lib/utils";
+import { getDistance } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // NOTE: We alias the fetched profile data explicitly to 'customer_profile' and
 // specify the foreign key constraint to avoid the "couldn't find relationship" error.
@@ -30,15 +32,17 @@ interface Booking {
   } | null;
 }
 
-const GOOGLE_MAPS_API_KEY = "AIzaSyANlH9ZOTkQ_xWPIBuDY-Ay0GuiQ1HY3kU";
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 const NEARBY_RADIUS_KM = 50; // 50km radius for nearby requests
 
 export default function MechanicDashboard() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [requests, setRequests] = useState<Booking[]>([]);
-  const [filteredRequests, setFilteredRequests] = useState<Booking[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<Booking[]>([]);
+  const [acceptedBookings, setAcceptedBookings] = useState<Booking[]>([]);
+  const [pastBookings, setPastBookings] = useState<Booking[]>([]);
+  const [filteredPendingRequests, setFilteredPendingRequests] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [mapCenter, setMapCenter] = useState({ lat: 17.385, lng: 78.4867 });
   const [mechanicLocation, setMechanicLocation] = useState<{ lat: number; lng: number } | null>(null);
@@ -78,7 +82,7 @@ export default function MechanicDashboard() {
       );
     }
 
-    fetchPendingRequests();
+    fetchDashboardData();
     const subscription = subscribeToRequests();
 
     return () => {
@@ -89,8 +93,8 @@ export default function MechanicDashboard() {
   }, [user, profile, navigate, toast]);
 
   useEffect(() => {
-    if (mechanicLocation && requests.length > 0) {
-      const nearby = requests.filter(request => {
+    if (mechanicLocation && pendingRequests.length > 0) {
+      const nearby = pendingRequests.filter(request => {
         if (request.latitude && request.longitude) {
           const distance = getDistance(
             mechanicLocation.lat,
@@ -102,26 +106,28 @@ export default function MechanicDashboard() {
         }
         return false;
       });
-      setFilteredRequests(nearby);
+      setFilteredPendingRequests(nearby);
       if (nearby.length > 0 && nearby[0].latitude && nearby[0].longitude) {
         setMapCenter({ lat: nearby[0].latitude, lng: nearby[0].longitude });
-      } else if (requests.length > 0 && requests[0].latitude && requests[0].longitude) {
-        setMapCenter({ lat: requests[0].latitude, lng: requests[0].longitude });
+      } else if (pendingRequests.length > 0 && pendingRequests[0].latitude && pendingRequests[0].longitude) {
+        setMapCenter({ lat: pendingRequests[0].latitude, lng: pendingRequests[0].longitude });
       }
     } else {
-      setFilteredRequests(requests);
-       if (requests.length > 0 && requests[0].latitude && requests[0].longitude) {
+      setFilteredPendingRequests(pendingRequests);
+       if (pendingRequests.length > 0 && pendingRequests[0].latitude && pendingRequests[0].longitude) {
         setMapCenter({
-          lat: requests[0].latitude,
-          lng: requests[0].longitude,
+          lat: pendingRequests[0].latitude,
+          lng: pendingRequests[0].longitude,
         });
       }
     }
-  }, [requests, mechanicLocation]);
+  }, [pendingRequests, mechanicLocation]);
 
-  const fetchPendingRequests = async () => {
+  const fetchDashboardData = async () => {
+    setLoading(true);
     try {
-      const { data, error } = await supabase
+      // Fetch pending requests
+      const { data: pendingData, error: pendingError } = await supabase
         .from("bookings")
         .select(`
           *,
@@ -130,18 +136,57 @@ export default function MechanicDashboard() {
         .eq("status", "pending")
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
-
-      const transformedData = (data || []).map((booking: any) => ({
+      if (pendingError) throw pendingError;
+      
+      const transformedPending = (pendingData || []).map((booking: any) => ({
         ...booking,
         customer_profile: Array.isArray(booking.customer_profile) ? booking.customer_profile[0] : booking.customer_profile
       }));
+      setPendingRequests(transformedPending as Booking[]);
 
-      setRequests(transformedData as Booking[]);
+      if (user) {
+        // Fetch accepted/in-progress requests
+        const { data: acceptedData, error: acceptedError } = await supabase
+          .from("bookings")
+          .select(`
+            *,
+            customer_profile:profiles!user_id (full_name, phone)
+          `)
+          .eq("mechanic_id", user.id)
+          .in("status", ["confirmed", "in_progress"])
+          .order("created_at", { ascending: false });
+
+        if (acceptedError) throw acceptedError;
+        
+        const transformedAccepted = (acceptedData || []).map((booking: any) => ({
+          ...booking,
+          customer_profile: Array.isArray(booking.customer_profile) ? booking.customer_profile[0] : booking.customer_profile
+        }));
+        setAcceptedBookings(transformedAccepted as Booking[]);
+
+        // Fetch past (completed/cancelled) requests
+        const { data: pastData, error: pastError } = await supabase
+          .from("bookings")
+          .select(`
+            *,
+            customer_profile:profiles!user_id (full_name, phone)
+          `)
+          .eq("mechanic_id", user.id)
+          .in("status", ["completed", "cancelled", "rejected"])
+          .order("created_at", { ascending: false });
+        
+        if (pastError) throw pastError;
+
+        const transformedPast = (pastData || []).map((booking: any) => ({
+            ...booking,
+            customer_profile: Array.isArray(booking.customer_profile) ? booking.customer_profile[0] : booking.customer_profile
+        }));
+        setPastBookings(transformedPast as Booking[]);
+      }
 
     } catch (error: any) {
       toast({
-        title: "Error fetching requests",
+        title: "Error fetching dashboard data",
         description: error.message,
         variant: "destructive",
       });
@@ -161,8 +206,23 @@ export default function MechanicDashboard() {
           schema: "public",
           table: "bookings",
         },
-        () => {
-          fetchPendingRequests();
+        (payload) => {
+           // Check for cancellations to notify mechanic
+          if (payload.eventType === 'UPDATE') {
+            const oldStatus = (payload.old as any)?.status;
+            const newStatus = (payload.new as any)?.status;
+            if (oldStatus === 'pending' && newStatus === 'cancelled') {
+              const bookingDetails = payload.new as Booking;
+               fetchDashboardData(); // Refetch to get customer name if not available
+               const customerName = bookingDetails.customer_profile?.full_name || 'A user';
+               toast({
+                title: "Request Cancelled",
+                description: `${customerName} cancelled their service request for "${bookingDetails.service_type}".`
+              })
+            }
+          }
+          // Refetch to update all lists
+          fetchDashboardData();
         }
       )
       .subscribe();
@@ -171,48 +231,62 @@ export default function MechanicDashboard() {
   };
 
   const handleAcceptRequest = async (bookingId: string) => {
-    try {
-      if ("geolocation" in navigator) {
-        navigator.geolocation.getCurrentPosition(
-          async (position) => {
-            const { data, error } = await supabase
-              .from("bookings")
-              .update({
-                mechanic_id: user?.id,
-                status: "accepted",
-                mechanic_latitude: position.coords.latitude,
-                mechanic_longitude: position.coords.longitude,
-                mechanic_last_location_update: new Date().toISOString(),
-              })
-              .eq("id", bookingId)
-              .select()
-              .single();
-
-            if (error) throw error;
-
-            toast({
-              title: "Request Accepted",
-              description: "You can now see the customer's location and navigate to them.",
-            });
-
-            navigate(`/tracking/${bookingId}`);
-          },
-          (error) => {
-            toast({
-              title: "Location Error",
-              description: "Please enable location services to accept requests.",
-              variant: "destructive",
-            });
-          }
-        );
-      }
-    } catch (error: any) {
+     if (!("geolocation" in navigator)) {
       toast({
-        title: "Error",
-        description: error.message,
+        title: "Geolocation Not Supported",
+        description:
+          "Your browser does not support location services, which are required to accept requests.",
         variant: "destructive",
       });
+      return;
     }
+
+    setLoading(true);
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { error } = await supabase
+            .from("bookings")
+            .update({
+              mechanic_id: user?.id,
+              status: "confirmed", // Use 'confirmed' status
+              mechanic_latitude: position.coords.latitude,
+              mechanic_longitude: position.coords.longitude,
+              mechanic_last_location_update: new Date().toISOString(),
+            })
+            .eq("id", bookingId);
+
+          if (error) throw error;
+
+          toast({
+            title: "Request Accepted",
+            description:
+              "You can now see the customer's location and navigate to them.",
+          });
+
+          navigate(`/tracking/${bookingId}`);
+        } catch (error: any) {
+          toast({
+            title: "Error Accepting Request",
+            description: error.message,
+            variant: "destructive",
+          });
+        } finally {
+          setLoading(false);
+        }
+      },
+      (error) => {
+        toast({
+          title: "Location Error",
+          description:
+            "Please enable location services to accept requests. " +
+            error.message,
+          variant: "destructive",
+        });
+        setLoading(false);
+      }
+    );
   };
 
   const handleRejectRequest = async (bookingId: string) => {
@@ -230,7 +304,7 @@ export default function MechanicDashboard() {
         description: "The request has been removed from your dashboard.",
       });
       // Manually remove the request from the local state for a faster UI update
-      setRequests((prevRequests) => prevRequests.filter((req) => req.id !== bookingId));
+      setPendingRequests((prevRequests) => prevRequests.filter((req) => req.id !== bookingId));
     } catch (error: any) {
       toast({
         title: "Error",
@@ -239,11 +313,20 @@ export default function MechanicDashboard() {
       });
     }
   };
+  
+  const getStatusBadgeVariant = (status: string): "default" | "secondary" | "destructive" | "outline" => {
+    switch (status) {
+        case 'completed': return 'default';
+        case 'cancelled': return 'secondary';
+        case 'rejected': return 'destructive';
+        default: return 'outline';
+    }
+  }
 
-  if (loading) {
+  if (loading && pendingRequests.length === 0 && acceptedBookings.length === 0) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p>Loading requests...</p>
+        <p>Loading your dashboard...</p>
       </div>
     );
   }
@@ -251,113 +334,204 @@ export default function MechanicDashboard() {
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      <div className="container mx-auto px-4 py-8 mt-20">
-        <h1 className="text-3xl font-bold mb-6">Nearby Service Requests</h1>
-
-        {filteredRequests.length === 0 ? (
-          <Card>
-            <CardContent className="py-12 text-center">
-              <Car className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-muted-foreground">No nearby pending requests at the moment.</p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid gap-6 lg:grid-cols-2">
-            <div className="space-y-4">
-              {filteredRequests.map((request) => (
-                <Card key={request.id}>
-                  <CardHeader>
-                    <CardTitle className="flex items-center justify-between">
-                      <span className="text-lg">
-                        {request.service_type} - {request.vehicle_type}
-                      </span>
-                      <span className="text-sm font-normal text-muted-foreground">
-                        {new Date(request.created_at).toLocaleTimeString()}
-                      </span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="flex items-start gap-2">
-                      <MapPin className="h-4 w-4 mt-1 text-muted-foreground" />
-                      <div>
-                        <p className="font-medium">Location</p>
-                        <p className="text-sm text-muted-foreground">{request.location}</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-2">
-                      <Clock className="h-4 w-4 mt-1 text-muted-foreground" />
-                      <div>
-                        <p className="font-medium">Customer</p>
-                        <p className="text-sm text-muted-foreground">
-                          {request.customer_profile?.full_name || "User"}
-                        </p>
-                        <p className="text-sm text-muted-foreground">{request.customer_profile?.phone}</p>
-                      </div>
-                    </div>
-
-                    {request.description && (
-                      <div>
-                        <p className="font-medium">Description</p>
-                        <p className="text-sm text-muted-foreground">{request.description}</p>
-                      </div>
-                    )}
-
-                    <div className="flex gap-2 pt-2">
-                      <Button
-                        onClick={() => handleAcceptRequest(request.id)}
-                        className="flex-1"
-                      >
-                        <CheckCircle className="h-4 w-4 mr-2" />
-                        Accept
-                      </Button>
-                      <Button
-                        onClick={() => handleRejectRequest(request.id)}
-                        variant="outline"
-                        className="flex-1"
-                      >
-                        <XCircle className="h-4 w-4 mr-2" />
-                        Reject
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-
-            <div className="lg:sticky lg:top-24 h-[600px]">
-              <Card className="h-full">
-                <CardHeader>
-                  <CardTitle>Request Locations</CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                    {/* The Google Maps component requires a specific API key variable that is expected to be present. 
-                        If the map fails to load, ensure you have set the GOOGLE_MAPS_API_KEY environment variable. */}
-                  <LoadScript googleMapsApiKey={GOOGLE_MAPS_API_KEY}>
-                    <GoogleMap
-                      mapContainerStyle={{ width: "100%", height: "520px" }}
-                      center={mapCenter}
-                      zoom={12}
-                    >
-                      {filteredRequests
-                        .filter((r) => r.latitude && r.longitude)
-                        .map((request) => (
-                          <Marker
-                            key={request.id}
-                            position={{
-                              lat: request.latitude!,
-                              lng: request.longitude!,
-                            }}
-                            title={`${request.service_type} - ${request.customer_profile?.full_name}`}
-                          />
-                        ))}
-                    </GoogleMap>
-                  </LoadScript>
+      <div className="container mx-auto px-4 py-8 mt-20 space-y-12">
+        
+        <Tabs defaultValue="active">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="active">Active Jobs</TabsTrigger>
+            <TabsTrigger value="history">Job History</TabsTrigger>
+          </TabsList>
+          <TabsContent value="active" className="mt-6">
+            {acceptedBookings.length === 0 ? (
+              <Card>
+                <CardContent className="py-12 text-center">
+                  <Car className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                  <p className="text-muted-foreground">You have no active jobs right now.</p>
                 </CardContent>
               </Card>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {acceptedBookings.map((booking) => (
+                  <Card key={booking.id}>
+                    <CardHeader>
+                      <CardTitle className="flex items-center justify-between">
+                        <span className="text-lg">{booking.service_type}</span>
+                        <Badge>{booking.status}</Badge>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="flex items-start gap-2">
+                        <MapPin className="h-4 w-4 mt-1 text-muted-foreground" />
+                        <div>
+                          <p className="font-medium">Location</p>
+                          <p className="text-sm text-muted-foreground">{booking.location}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <Clock className="h-4 w-4 mt-1 text-muted-foreground" />
+                        <div>
+                          <p className="font-medium">Customer</p>
+                          <p className="text-sm text-muted-foreground">{booking.customer_profile?.full_name || "User"}</p>
+                          <p className="text-sm text-muted-foreground">{booking.customer_profile?.phone}</p>
+                        </div>
+                      </div>
+                      <Button onClick={() => navigate(`/tracking/${booking.id}`)} className="w-full">
+                        <Eye className="h-4 w-4 mr-2" />
+                        Track Live
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+          <TabsContent value="history" className="mt-6">
+            {pastBookings.length === 0 ? (
+              <Card>
+                <CardContent className="py-12 text-center">
+                  <History className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                  <p className="text-muted-foreground">You have no past jobs.</p>
+                </CardContent>
+              </Card>
+            ) : (
+               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {pastBookings.map((booking) => (
+                  <Card key={booking.id}>
+                    <CardHeader>
+                      <CardTitle className="flex items-center justify-between">
+                        <span className="text-lg">{booking.service_type}</span>
+                        <Badge variant={getStatusBadgeVariant(booking.status)}>{booking.status}</Badge>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                       <div className="flex items-start gap-2">
+                        <MapPin className="h-4 w-4 mt-1 text-muted-foreground" />
+                        <div>
+                          <p className="font-medium">Location</p>
+                          <p className="text-sm text-muted-foreground">{booking.location}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <Clock className="h-4 w-4 mt-1 text-muted-foreground" />
+                        <div>
+                          <p className="font-medium">Customer</p>
+                          <p className="text-sm text-muted-foreground">{booking.customer_profile?.full_name || "User"}</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
+        
+        {/* Section for Nearby Pending Requests */}
+        <div>
+          <h1 className="text-3xl font-bold mb-6">Nearby Service Requests</h1>
+          {filteredPendingRequests.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <Car className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <p className="text-muted-foreground">No nearby pending requests at the moment.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-6 lg:grid-cols-2">
+              <div className="space-y-4">
+                {filteredPendingRequests.map((request) => (
+                  <Card key={request.id}>
+                    <CardHeader>
+                      <CardTitle className="flex items-center justify-between">
+                        <span className="text-lg">
+                          {request.service_type} - {request.vehicle_type}
+                        </span>
+                        <span className="text-sm font-normal text-muted-foreground">
+                          {new Date(request.created_at).toLocaleTimeString()}
+                        </span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="flex items-start gap-2">
+                        <MapPin className="h-4 w-4 mt-1 text-muted-foreground" />
+                        <div>
+                          <p className="font-medium">Location</p>
+                          <p className="text-sm text-muted-foreground">{request.location}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-2">
+                        <Clock className="h-4 w-4 mt-1 text-muted-foreground" />
+                        <div>
+                          <p className="font-medium">Customer</p>
+                          <p className="text-sm text-muted-foreground">
+                            {request.customer_profile?.full_name || "User"}
+                          </p>
+                          <p className="text-sm text-muted-foreground">{request.customer_profile?.phone}</p>
+                        </div>
+                      </div>
+
+                      {request.description && (
+                        <div>
+                          <p className="font-medium">Description</p>
+                          <p className="text-sm text-muted-foreground">{request.description}</p>
+                        </div>
+                      )}
+
+                      <div className="flex gap-2 pt-2">
+                        <Button
+                          onClick={() => handleAcceptRequest(request.id)}
+                          className="flex-1"
+                        >
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                          Accept
+                        </Button>
+                        <Button
+                          onClick={() => handleRejectRequest(request.id)}
+                          variant="outline"
+                          className="flex-1"
+                        >
+                          <XCircle className="h-4 w-4 mr-2" />
+                          Reject
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+
+              <div className="lg:sticky lg:top-24 h-[600px]">
+                <Card className="h-full">
+                  <CardHeader>
+                    <CardTitle>Request Locations</CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <LoadScript googleMapsApiKey={GOOGLE_MAPS_API_KEY}>
+                      <GoogleMap
+                        mapContainerStyle={{ width: "100%", height: "520px" }}
+                        center={mapCenter}
+                        zoom={12}
+                      >
+                        {filteredPendingRequests
+                          .filter((r) => r.latitude && r.longitude)
+                          .map((request) => (
+                            <Marker
+                              key={request.id}
+                              position={{
+                                lat: request.latitude!,
+                                lng: request.longitude!,
+                              }}
+                              title={`${request.service_type} - ${request.customer_profile?.full_name}`}
+                            />
+                          ))}
+                      </GoogleMap>
+                    </LoadScript>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
