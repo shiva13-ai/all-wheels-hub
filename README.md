@@ -9,10 +9,6 @@ This looks like a complete and well-structured React application built with Vite
 
 There are several ways of editing your application.
 
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/0716469b-44a4-4b4a-a2e7-0b5b810e0639) and start prompting.
-
 Changes made via Lovable will be committed automatically to this repo.
 
 **Use your preferred IDE**
