@@ -8,6 +8,8 @@ import { ShoppingCart, Star, Wrench, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { storeService, Product } from "@/services/supabase/store"; 
 
+const CART_STORAGE_KEY = "autoaid_cart";
+
 interface CartItem extends Product {
     quantity: number;
 }
@@ -19,27 +21,31 @@ export default function Store() {
   const [products, setProducts] = useState<Product[]>([]); 
   const [loading, setLoading] = useState(true);
 
-  // Fetch products from Supabase on mount
+  // Fetch products from Supabase and load cart on mount
   useEffect(() => {
+      try {
+        const storedCart = localStorage.getItem(CART_STORAGE_KEY);
+        if (storedCart) {
+          setCart(JSON.parse(storedCart));
+        }
+      } catch (e) {
+        console.error("Failed to load cart from local storage", e);
+      }
+
       const fetchProducts = async () => {
           setLoading(true);
-          // Use the actual service function to fetch active products
           const { data, error } = await storeService.getActiveProducts();
           if (error) {
               console.error("Supabase Error fetching products:", error);
               toast({
                   title: "Error",
-                  description: "Failed to load store products. Please check Supabase connection and RLS policies.",
+                  description: "Failed to load store products.",
                   variant: "destructive"
               });
               setProducts([]); 
           } else {
-              // Convert price back to major unit (e.g., dollars/rupees) for display
-              const formattedData = (data || []).map(p => ({
-                  ...p,
-                  price: p.price / 100,
-              })) as Product[];
-              setProducts(formattedData);
+              // storeService already converts price to major units.
+              setProducts((data || []) as Product[]);
           }
           setLoading(false);
       };
@@ -47,19 +53,32 @@ export default function Store() {
   }, [toast]);
 
   const handleAddToCart = (product: Product) => {
-    setCart((prevCart) => {
-        const existingItem = prevCart.find(item => item.id === product.id);
-        
-        if (existingItem) {
-            // Increase quantity if item is already in cart
-            return prevCart.map(item => 
-                item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
-            );
-        } else {
-            // Add new item to cart
-            return [...prevCart, { ...product, quantity: 1 }];
-        }
-    });
+    let currentCart: CartItem[] = [];
+    try {
+      const storedCart = localStorage.getItem(CART_STORAGE_KEY);
+      if (storedCart) {
+        currentCart = JSON.parse(storedCart);
+      }
+    } catch (e) {
+      console.error("Failed to parse cart from local storage", e);
+      currentCart = []; // Start with an empty cart if storage is corrupt
+    }
+
+    const existingItem = currentCart.find(item => item.id === product.id);
+    
+    let updatedCart: CartItem[];
+    if (existingItem) {
+        // Increase quantity if item is already in cart
+        updatedCart = currentCart.map(item => 
+            item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
+        );
+    } else {
+        // Add new item to cart
+        updatedCart = [...currentCart, { ...product, quantity: 1 }];
+    }
+
+    localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(updatedCart));
+    setCart(updatedCart);
 
     toast({
       title: "Added to Cart",
