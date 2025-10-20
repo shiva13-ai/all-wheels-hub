@@ -1,18 +1,18 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { Header } from "@/components/Header";
-import { Footer } from "@/components/Footer";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
+import { Header } from "../components/Header";
+import { Footer } from "../components/Footer";
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Button } from "../components/ui/button";
+import { useToast } from "../hooks/use-toast";
 import { ShoppingCart, Trash2, ArrowLeft, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
+import { Input } from "../components/ui/input";
+import { Separator } from "../components/ui/separator";
 
 // Define the structure for an item in the cart
 interface CartItem {
   id: string;
-  name: string;
+  title: string;
   price: number;
   quantity: number;
   image_url: string;
@@ -36,8 +36,6 @@ const Cart: React.FC = () => {
       }
     } catch (e) {
       console.error("Failed to load cart from local storage", e);
-      // Optional: Clear corrupted storage if needed
-      // localStorage.removeItem(CART_STORAGE_KEY);
     } finally {
       setLoading(false);
     }
@@ -89,10 +87,8 @@ const Cart: React.FC = () => {
 
   const calculateTotal = () => {
     const subtotal = calculateSubtotal();
-    // Simple mock tax/shipping for calculation purposes
-    const taxRate = 0.05;
     const shipping = subtotal > 0 ? 10.00 : 0;
-    const tax = subtotal * taxRate;
+    const tax = subtotal * 0.05;
     
     return subtotal + tax + shipping;
   };
@@ -107,10 +103,11 @@ const Cart: React.FC = () => {
 
   const subtotal = calculateSubtotal();
   const total = calculateTotal();
+  const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
     <div className="min-h-screen bg-background">
-      <Header cartItemCount={cart.length} />
+      <Header cartItemCount={totalItems} />
       <main className="container mx-auto px-4 py-8 mt-20">
         <div className="flex items-center justify-between mb-8">
             <h1 className="text-3xl font-bold tracking-tight">Your Shopping Cart</h1>
@@ -138,13 +135,13 @@ const Cart: React.FC = () => {
                 <Card key={item.id} className="flex p-4 items-center">
                   <img
                     src={item.image_url || `https://placehold.co/80x80/e2e8f0/334155?text=Product`}
-                    alt={item.name}
+                    alt={item.title}
                     className="w-20 h-20 object-cover rounded-md mr-4"
                   />
                   <div className="flex-1 min-w-0">
-                    <CardTitle className="text-lg font-semibold">{item.name}</CardTitle>
-                    <p className="text-sm text-muted-foreground truncate">{item.price.toFixed(2)} / unit</p>
-                    <p className="text-lg font-bold text-primary">${(item.price * item.quantity).toFixed(2)}</p>
+                    <CardTitle className="text-lg font-semibold">{item.title}</CardTitle>
+                    <p className="text-sm text-muted-foreground truncate">₹{item.price.toFixed(2)} / unit</p>
+                    <p className="text-lg font-bold text-primary">₹{(item.price * item.quantity).toFixed(2)}</p>
                   </div>
                   
                   <div className="flex items-center space-x-3 ml-4">
@@ -180,16 +177,16 @@ const Cart: React.FC = () => {
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span>Subtotal ({cart.length} items)</span>
-                    <span>${subtotal.toFixed(2)}</span>
+                    <span>Subtotal ({totalItems} items)</span>
+                    <span>₹{subtotal.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-sm text-muted-foreground">
                     <span>Shipping</span>
-                    <span>{subtotal > 0 ? '$10.00' : '$0.00'}</span>
+                    <span>₹{subtotal > 0 ? '10.00' : '0.00'}</span>
                   </div>
                   <div className="flex justify-between text-sm text-muted-foreground">
                     <span>Tax (5%)</span>
-                    <span>${(subtotal * 0.05).toFixed(2)}</span>
+                    <span>₹{(subtotal * 0.05).toFixed(2)}</span>
                   </div>
                 </div>
                 
@@ -197,10 +194,10 @@ const Cart: React.FC = () => {
                 
                 <div className="flex justify-between text-xl font-bold text-foreground">
                   <span>Order Total</span>
-                  <span>${total.toFixed(2)}</span>
+                  <span>₹{total.toFixed(2)}</span>
                 </div>
                 
-                <Button variant="cta" className="w-full text-lg h-12" disabled={subtotal === 0}>
+                <Button variant="cta" className="w-full text-lg h-12" onClick={() => navigate('/checkout', { state: { cart } })} disabled={subtotal === 0}>
                   Proceed to Checkout
                 </Button>
               </CardContent>
@@ -214,3 +211,4 @@ const Cart: React.FC = () => {
 };
 
 export default Cart;
+
