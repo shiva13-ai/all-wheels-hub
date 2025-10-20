@@ -1,9 +1,23 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { MapPin, Clock, Shield, Star } from "lucide-react";
-import heroImage from "@/assets/hero-vehicles.jpg";
+// FIX: Using a publicly accessible placeholder URL instead of a local asset path for compatibility.
+const heroImage = "https://placehold.co/1920x1080/0f172a/94a3b8?text=Vehicle+Service+Hub"; 
+import { useNavigate } from "react-router-dom";
 
 export const HeroSection = () => {
+  const navigate = useNavigate();
+
+  const handleBookServiceClick = () => {
+    navigate('/find-mechanics');
+  }
+
+  const handleSOSClick = () => {
+    // Navigate to a section or trigger the modal/page. For now, we link to the anchor.
+    // The SOSModal will open automatically via SOSButton in Index.tsx
+    navigate('/emergency'); 
+  }
+
   return (
     <section className="relative min-h-[90vh] flex items-center justify-center overflow-hidden">
       {/* Background */}
@@ -32,10 +46,20 @@ export const HeroSection = () => {
           </div>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button variant="cta" size="lg" className="text-lg px-8 py-6">
+            <Button 
+              variant="cta" 
+              size="lg" 
+              className="text-lg px-8 py-6"
+              onClick={handleBookServiceClick}
+            >
               Book Service Now
             </Button>
-            <Button variant="hero" size="lg" className="text-lg px-8 py-6">
+            <Button 
+              variant="hero" 
+              size="lg" 
+              className="text-lg px-8 py-6"
+              onClick={handleSOSClick}
+            >
               Emergency SOS
             </Button>
           </div>
