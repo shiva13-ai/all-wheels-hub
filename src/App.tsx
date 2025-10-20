@@ -1,12 +1,24 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import Home from '@/pages/Index';
-import Store from '@/pages/Store';
-import Profile from '@/pages/Profile';
-import { AuthProvider, useAuth } from '@/contexts/AuthContext';
-import { Toaster } from '@/components/ui/toaster';
+import Home from './pages/Index';
+import Store from './pages/Store';
+import Profile from './pages/Profile';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { Toaster } from './components/ui/toaster';
+import Auth from './pages/Auth';
+import FindMechanics from './pages/FindMechanics';
+import Tracking from './pages/Tracking';
+import ChatPage from './pages/Chat';
+import MechanicDashboard from './pages/MechanicDashboard';
+import NotFound from './pages/NotFound';
+import Cart from './pages/Cart';
+import Checkout from './pages/Checkout';
+import ServiceHistory from './pages/ServiceHistory';
+import MechanicStore from './pages/MechanicStore';
+import OrderHistory from './pages/OrderHistory';
+
 
 // A private route wrapper component
-const ProtectedRoute = ({ children, roles }: { children: JSX.Element, roles?: ('customer' | 'mechanic')[] }) => {
+const ProtectedRoute = ({ children, roles }: { children: JSX.Element, roles?: ('user' | 'mechanic' | 'admin')[] }) => {
   const { user, profile, loading } = useAuth();
   
   if (loading) {
@@ -30,23 +42,26 @@ const AppRoutes = () => {
     <Routes>
       <Route path="/" element={<Home />} />
       <Route path="/store" element={<Store />} />
-      
-      {/* Example of a route requiring authentication */}
-      <Route path="/profile" element={
-        <ProtectedRoute>
-          <Profile />
-        </ProtectedRoute>
-      } />
+      <Route path="/auth" element={<Auth />} />
+      <Route path="/find-mechanics" element={<FindMechanics />} />
+      <Route path="/emergency" element={<Home />} /> 
+      <Route path="/cart" element={<Cart />} />
 
-      {/* Placeholder routes for other pages mentioned in Header */}
-      <Route path="/auth" element={<div>Auth Page (Login/Signup)</div>} />
-      <Route path="/find-mechanics" element={<div>Find Mechanics Page</div>} />
-      <Route path="/emergency" element={<div>Emergency Page</div>} />
-      <Route path="/chat" element={<ProtectedRoute><div>Chat Page</div></ProtectedRoute>} />
-      <Route path="/mechanic-dashboard" element={<ProtectedRoute roles={['mechanic']}><div>Mechanic Dashboard Page</div></ProtectedRoute>} />
+      {/* Protected Routes */}
+      <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+      <Route path="/tracking/:bookingId" element={<ProtectedRoute><Tracking /></ProtectedRoute>} />
+      <Route path="/chat" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
+      <Route path="/chat/:bookingId" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
+      <Route path="/history" element={<ProtectedRoute><ServiceHistory /></ProtectedRoute>} />
+      <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
+      <Route path="/orders" element={<ProtectedRoute><OrderHistory /></ProtectedRoute>} />
+      
+      {/* Mechanic Only Routes */}
+      <Route path="/mechanic-dashboard" element={<ProtectedRoute roles={['mechanic', 'admin']}><MechanicDashboard /></ProtectedRoute>} />
+      <Route path="/mechanic-store" element={<ProtectedRoute roles={['mechanic', 'admin']}><MechanicStore /></ProtectedRoute>} />
 
       {/* Fallback route */}
-      <Route path="*" element={<div>404 Not Found</div>} />
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 };
@@ -61,3 +76,4 @@ export default function App() {
     </BrowserRouter>
   );
 }
+
