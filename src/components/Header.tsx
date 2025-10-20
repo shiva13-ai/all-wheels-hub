@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "../contexts/AuthContext";
-import { Bell, Menu, User, Wrench, MessageCircle, LogOut, UserCog } from "lucide-react";
+import { Bell, Menu, User, Wrench, MessageCircle, LogOut, UserCog, ShoppingCart, History, Store, ShoppingBag } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,7 +12,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
-export const Header = () => {
+interface HeaderProps {
+    cartItemCount?: number;
+}
+
+export const Header = ({ cartItemCount = 0 }: HeaderProps) => {
   const { user, profile, signOut } = useAuth();
   const navigate = useNavigate();
 
@@ -57,10 +61,33 @@ export const Header = () => {
               </Button>
             )}
             
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="w-5 h-5" />
-              <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-background"></span>
-            </Button>
+            {user && (
+              <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={() => navigate('/history')}
+                  className="relative"
+              >
+                  <History className="w-5 h-5" />
+                  <span className="sr-only">Service History</span>
+              </Button>
+            )}
+            
+            {user && cartItemCount > 0 && (
+              <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={() => navigate('/cart')}
+                  className="relative"
+              >
+                  <ShoppingCart className="w-5 h-5" />
+                  {cartItemCount > 0 && (
+                      <span className="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-destructive-foreground text-xs rounded-full flex items-center justify-center">
+                          {cartItemCount}
+                      </span>
+                  )}
+              </Button>
+            )}
             
             {user && profile ? (
               <DropdownMenu>
@@ -86,10 +113,21 @@ export const Header = () => {
                     <UserCog className="mr-2 h-4 w-4" />
                     <span>Profile</span>
                   </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate('/orders')}>
+                    <ShoppingBag className="mr-2 h-4 w-4" />
+                    <span>My Orders</span>
+                  </DropdownMenuItem>
                   {profile.role === 'mechanic' && (
                        <DropdownMenuItem onClick={() => navigate('/mechanic-dashboard')}>
                           <Wrench className="mr-2 h-4 w-4" />
                           <span>Dashboard</span>
+                      </DropdownMenuItem>
+                  )}
+                  {/* ADDED: Link to Mechanic Store */}
+                  {(profile.role === 'mechanic' || profile.role === 'admin') && (
+                       <DropdownMenuItem onClick={() => navigate('/mechanic-store')}>
+                          <Store className="mr-2 h-4 w-4" />
+                          <span>My Store</span>
                       </DropdownMenuItem>
                   )}
                   <DropdownMenuSeparator />
@@ -118,3 +156,4 @@ export const Header = () => {
     </header>
   );
 };
+
