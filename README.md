@@ -1,4 +1,4 @@
-# Welcome to your Lovable project
+# Welcome to your Service Hub project
 
 ## Project info
 
@@ -57,12 +57,7 @@ This project is built with:
 
 ## How can I deploy this project?
 
-Simply open [Lovable](https://lovable.dev/projects/0716469b-44a4-4b4a-a2e7-0b5b810e0639) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
+Simply do it with free sources lkike firebase, supabase.
+## Can I connect a custom domain to my Service Hub project?
 
 Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
