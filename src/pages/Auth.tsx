@@ -6,9 +6,10 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group';
-import { AlertCircle, Car, Wrench, User } from 'lucide-react';
+import { AlertCircle, Car, Wrench, User, PersonStanding, Shield, User as UserIcon } from 'lucide-react'; 
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { authService } from '../services/supabase/auth';
+import { profilesService } from '../services/supabase/profiles'; 
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../hooks/use-toast';
 import { MechanicRegistrationForm } from '../components/MechanicRegistrationForm';
@@ -18,6 +19,8 @@ const Auth = () => {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
+  const [gender, setGender] = useState<'male' | 'female' | 'other' | 'prefer_not_to_say'>('prefer_not_to_say'); 
+  const [guardianPhone, setGuardianPhone] = useState(''); 
   const [userType, setUserType] = useState<'user' | 'mechanic'>('user');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -26,6 +29,8 @@ const Auth = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
+  
+  const isFemaleUser = userType === 'user' && gender === 'female';
 
   useEffect(() => {
     if (user) {
@@ -38,28 +43,54 @@ const Auth = () => {
     setLoading(true);
     setError('');
 
+    // Client-side validation for guardian phone
+    if (isFemaleUser && !guardianPhone.trim()) {
+        setError("Guardian phone number is required for female users.");
+        setLoading(false);
+        return;
+    }
+
     try {
-      // NOTE: supabase authService signature needs to be checked based on your service/supabase/auth.ts
-      // Assuming it takes email, password, fullName (and optionally phone if implemented in service)
-      const { data, error } = await authService.signUp(email, password, fullName);
-      if (error) {
-        setError(error.message);
-      } else {
-        if (userType === 'mechanic' && data.user) {
-          // Show mechanic registration form
-          setNewUserId(data.user.id);
+      // 1. Sign up the user (creates auth.users entry)
+      const { data, error: authError } = await authService.signUp(email, password, fullName);
+      if (authError) {
+        setError(authError.message);
+        setLoading(false);
+        return;
+      }
+      
+      const newAuthUser = data.user;
+
+      if (newAuthUser) {
+        // 2. Update the newly created profile with additional sign-up details
+        const profileUpdates = {
+          full_name: fullName,
+          phone,
+          gender: gender, 
+          guardian_phone: isFemaleUser ? guardianPhone : null, 
+          role: userType,
+        };
+        
+        const { error: profileError } = await profilesService.updateProfile(newAuthUser.id, profileUpdates);
+        
+        if (profileError) {
+             console.error("Failed to update profile details:", profileError);
+             setError("Account created, but failed to save profile details. Please update your profile later.");
+        }
+
+        if (userType === 'mechanic') {
+          setNewUserId(newAuthUser.id);
           setShowMechanicForm(true);
           toast({
             title: 'Account created!',
-            description: 'Please complete your mechanic profile.',
+            description: 'Please complete your mechanic profile for verification.',
           });
         } else {
           toast({
             title: 'Account created!',
-            description: 'Please check your email to verify your account.',
+            description: 'Welcome to AutoAid! You are now signed in.',
           });
-          // For regular users, you might want to wait for verification or navigate them somewhere else
-           navigate('/');
+          navigate('/');
         }
       }
     } catch (err: any) {
@@ -194,8 +225,10 @@ const Auth = () => {
 
               <TabsContent value="signup">
                 <form onSubmit={handleSignUp} className="space-y-4">
+                  
+                  {/* User Type Selection */}
                   <div className="space-y-3">
-                    <Label>I am a...</Label>
+                    <Label>Account Type</Label>
                     <RadioGroup value={userType} onValueChange={(value: any) => setUserType(value)}>
                       <div className="flex items-center space-x-2 p-3 rounded-lg border border-border hover:bg-accent/50 transition-colors cursor-pointer">
                         <RadioGroupItem value="user" id="user" />
@@ -219,29 +252,83 @@ const Auth = () => {
                       </div>
                     </RadioGroup>
                   </div>
-
+                  
+                  {/* Gender Selection */}
+                  <div className="space-y-3">
+                    <Label>Gender</Label>
+                    <RadioGroup 
+                        value={gender} 
+                        onValueChange={(value: any) => setGender(value)}
+                        className="flex justify-between"
+                        required
+                    >
+                      <div className="flex items-center space-x-2 p-3 rounded-lg border border-border flex-1 mr-1 hover:bg-accent/50 transition-colors cursor-pointer">
+                        <RadioGroupItem value="male" id="male" />
+                        <Label htmlFor="male" className="flex items-center gap-2 cursor-pointer flex-1">
+                            <Shield className="w-4 h-4 text-blue-500" /> 
+                            Male
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2 p-3 rounded-lg border border-border flex-1 mr-1 hover:bg-accent/50 transition-colors cursor-pointer">
+                        <RadioGroupItem value="female" id="female" />
+                        <Label htmlFor="female" className="flex items-center gap-2 cursor-pointer flex-1">
+                            <UserIcon className="w-4 h-4 text-pink-500" />
+                            Female
+                        </Label>
+                      </div>
+                       <div className="flex items-center space-x-2 p-3 rounded-lg border border-border flex-1 hover:bg-accent/50 transition-colors cursor-pointer">
+                        <RadioGroupItem value="other" id="other" />
+                        <Label htmlFor="other" className="flex items-center gap-2 cursor-pointer flex-1">
+                            <PersonStanding className="w-4 h-4 text-green-500" />
+                            Other
+                        </Label>
+                      </div>
+                    </RadioGroup>
+                  </div>
+                  
+                  {/* Guardian Phone for Female Users */}
+                  {isFemaleUser && (
+                    <div className="space-y-2 p-3 border border-pink-300 bg-pink-50/50 rounded-lg">
+                        <Label htmlFor="guardian-phone" className="text-pink-600 font-semibold">Emergency Contact (Guardian Phone) *</Label>
+                        <Input
+                          id="guardian-phone"
+                          type="tel"
+                          value={guardianPhone}
+                          onChange={(e) => setGuardianPhone(e.target.value)}
+                          placeholder="Guardian's Phone Number"
+                          required={isFemaleUser}
+                        />
+                         <p className="text-xs text-muted-foreground">
+                            For your safety, this number will receive alerts during late-night service requests (8 PM - 6 AM).
+                        </p>
+                    </div>
+                  )}
+                  
+                  {/* Existing Fields */}
                   <div className="space-y-2">
-                    <Label htmlFor="signup-fullname">Full Name</Label>
+                    <Label htmlFor="signup-fullname">Full Name *</Label>
                     <Input
                       id="signup-fullname"
                       type="text"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
+                      placeholder="Enter your full name"
                       required
                     />
                   </div>
                    <div className="space-y-2">
-                    <Label htmlFor="signup-phone">Phone Number</Label>
+                    <Label htmlFor="signup-phone">Phone Number *</Label>
                     <Input
                       id="signup-phone"
                       type="tel"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
+                      placeholder="Enter your phone number"
                       required
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="signup-email">Email</Label>
+                    <Label htmlFor="signup-email">Email *</Label>
                     <Input
                       id="signup-email"
                       type="email"
@@ -251,7 +338,7 @@ const Auth = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="signup-password">Password</Label>
+                    <Label htmlFor="signup-password">Password *</Label>
                     <Input
                       id="signup-password"
                       type="password"
@@ -266,7 +353,7 @@ const Auth = () => {
                   </Button>
                   {userType === 'mechanic' && (
                     <p className="text-xs text-muted-foreground text-center">
-                      You'll need to provide your Udyam registration and verification photo next
+                      You'll need to provide your business verification details next.
                     </p>
                   )}
                 </form>
