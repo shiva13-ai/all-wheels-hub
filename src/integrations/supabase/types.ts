@@ -208,6 +208,8 @@ export type Database = {
           created_at: string
           experience_years: number | null
           full_name: string | null
+          gender: string | null // ADDED
+          guardian_phone: string | null // ADDED
           id: string
           is_available: boolean
           is_verified: boolean
@@ -227,6 +229,8 @@ export type Database = {
           created_at?: string
           experience_years?: number | null
           full_name?: string | null
+          gender?: string | null // ADDED
+          guardian_phone?: string | null // ADDED
           id?: string
           is_available?: boolean
           is_verified?: boolean
@@ -246,6 +250,8 @@ export type Database = {
           created_at?: string
           experience_years?: number | null
           full_name?: string | null
+          gender?: string | null // ADDED
+          guardian_phone?: string | null // ADDED
           id?: string
           is_available?: boolean
           is_verified?: boolean
