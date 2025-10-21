@@ -9,9 +9,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { profilesService } from "@/services/supabase/profiles";
-import { Loader2, User, Wrench, Store, Briefcase, Map } from "lucide-react";
+import { 
+  Loader2, 
+  User, 
+  Wrench, 
+  Store, 
+  Briefcase, 
+  Map, 
+  PersonStanding, 
+  Shield, 
+  User as UserIcon // Aliasing 'User' to 'UserIcon' for Female icon display
+} from "lucide-react"; 
 import { Switch } from "@/components/ui/switch";
 import { MapPickerDialog } from "@/components/MapPickerDialog";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 const SERVICES = [
   'Engine Repair', 'Brake Service', 'Oil Change', 'Tire Service',
@@ -24,8 +35,11 @@ export default function Profile() {
   const navigate = useNavigate();
   const { toast } = useToast();
   
+  // Profile fields (Updated to include gender and guardian info)
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
+  const [gender, setGender] = useState<'male' | 'female' | 'other' | 'prefer_not_to_say'>('prefer_not_to_say'); 
+  const [guardianPhone, setGuardianPhone] = useState(''); 
 
   // Mechanic-specific fields
   const [location, setLocation] = useState('');
@@ -37,6 +51,10 @@ export default function Profile() {
   
   const [loading, setLoading] = useState(false);
   const [showMapPicker, setShowMapPicker] = useState(false);
+  
+  // Logic to determine if the user is a female vehicle owner, triggering the guardian field
+  const isFemaleUser = profile?.role === 'user' && gender === 'female';
+
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -45,10 +63,14 @@ export default function Profile() {
     if (profile) {
       setFullName(profile.full_name || '');
       setPhone(profile.phone || '');
+      // Load new fields, providing defaults for robustness
+      setGender(profile.gender || 'prefer_not_to_say');
+      setGuardianPhone(profile.guardian_phone || '');
+      
       if (profile.role === 'mechanic') {
         setLocation(profile.location || '');
-        setLat(profile.lat || undefined); // Use undefined if null for initial state
-        setLng(profile.lng || undefined); // Use undefined if null for initial state
+        setLat(profile.latitude || undefined); 
+        setLng(profile.longitude || undefined); 
         setExperienceYears(profile.experience_years || '');
         setServicesOffered(profile.services_offered || []);
         setIsAvailable(profile.is_available);
@@ -71,28 +93,43 @@ export default function Profile() {
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
+    
+    // Client-side validation for guardian phone
+    if (isFemaleUser && !guardianPhone.trim()) {
+        toast({
+            title: "Validation Error",
+            description: "Emergency Contact (Guardian Phone) is required for safety protocols.",
+            variant: "destructive"
+        });
+        return;
+    }
+
 
     setLoading(true);
     try {
       const updates = {
         full_name: fullName,
         phone,
+        gender: gender, 
+        // Only save guardian phone if the user is a female user
+        guardian_phone: isFemaleUser ? guardianPhone : null, 
       };
 
       const mechanicUpdates = profile?.role === 'mechanic' ? {
         location,
-        latitude: lat, // Ensure correct column names used for Supabase
-        longitude: lng, // Ensure correct column names used for Supabase
+        latitude: lat, 
+        longitude: lng, 
         experience_years: Number(experienceYears) || 0,
         services_offered: servicesOffered,
         is_available: isAvailable,
       } : {};
 
+      // Send updates to Supabase
       const { error } = await profilesService.updateProfile(user.id, { ...updates, ...mechanicUpdates });
 
       if (error) throw error;
 
-      await refreshProfile();
+      await refreshProfile(); // Refresh profile context to show updated data
       toast({
         title: "Profile Updated",
         description: "Your information has been successfully saved.",
@@ -132,9 +169,11 @@ export default function Profile() {
                 <CardTitle className="flex items-center gap-2">
                   <User /> Personal Information
                 </CardTitle>
-                <CardDescription>Update your name and contact details.</CardDescription>
+                <CardDescription>Update your name, contact details, and gender information.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                
+                {/* Basic Details */}
                 <div className="space-y-2">
                   <Label htmlFor="fullName">Full Name</Label>
                   <Input id="fullName" value={fullName} onChange={(e) => setFullName(e.target.value)} />
@@ -143,9 +182,62 @@ export default function Profile() {
                   <Label htmlFor="phone">Phone Number</Label>
                   <Input id="phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
                 </div>
+                
+                {/* --- Gender Selection --- */}
+                <div className="space-y-3 pt-2">
+                  <Label>Gender</Label>
+                  <RadioGroup 
+                      value={gender} 
+                      onValueChange={(value: any) => setGender(value)}
+                      className="flex flex-wrap justify-between gap-2"
+                      required
+                  >
+                    <div className="flex items-center space-x-2 p-3 rounded-lg border border-border flex-1 min-w-[45%] hover:bg-accent/50 transition-colors cursor-pointer">
+                      <RadioGroupItem value="male" id="gender-male" />
+                      <Label htmlFor="gender-male" className="flex items-center gap-2 cursor-pointer flex-1">
+                          <Shield className="w-4 h-4 text-blue-500" /> 
+                          Male
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2 p-3 rounded-lg border border-border flex-1 min-w-[45%] hover:bg-accent/50 transition-colors cursor-pointer">
+                      <RadioGroupItem value="female" id="gender-female" />
+                      <Label htmlFor="gender-female" className="flex items-center gap-2 cursor-pointer flex-1">
+                          <UserIcon className="w-4 h-4 text-pink-500" />
+                          Female
+                      </Label>
+                    </div>
+                      <div className="flex items-center space-x-2 p-3 rounded-lg border border-border flex-1 min-w-[45%] hover:bg-accent/50 transition-colors cursor-pointer">
+                      <RadioGroupItem value="other" id="gender-other" />
+                      <Label htmlFor="gender-other" className="flex items-center gap-2 cursor-pointer flex-1">
+                          <PersonStanding className="w-4 h-4 text-green-500" />
+                          Other/Prefer not to say
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+                
+                {/* --- Guardian Phone for Female Users (Dynamic visibility) --- */}
+                {isFemaleUser && (
+                  <div className="space-y-2 p-3 border border-pink-300 bg-pink-50/50 rounded-lg">
+                      <Label htmlFor="guardian-phone" className="text-pink-600 font-semibold">Emergency Contact (Guardian Phone) *</Label>
+                      <Input
+                        id="guardian-phone"
+                        type="tel"
+                        value={guardianPhone}
+                        onChange={(e) => setGuardianPhone(e.target.value)}
+                        placeholder="Guardian's Phone Number"
+                        required={isFemaleUser}
+                      />
+                       <p className="text-xs text-muted-foreground">
+                          For your safety, this number receives alerts for late-night service requests (8 PM - 6 AM).
+                      </p>
+                  </div>
+                )}
+                
               </CardContent>
             </Card>
 
+            {/* --- Mechanic Specific Details --- */}
             {profile.role === 'mechanic' && (
               <>
                 <Card className="mb-6">
