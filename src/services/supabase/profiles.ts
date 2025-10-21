@@ -6,8 +6,12 @@ export type UserProfile = {
   full_name: string | null;
   phone: string | null;
   role: 'user' | 'mechanic' | 'admin';
+  gender: 'male' | 'female' | 'other' | 'prefer_not_to_say' | null; // ADDED
+  guardian_phone: string | null; // ADDED
   avatar_url: string | null;
   location: string | null;
+  latitude: number | null; // Added from database types
+  longitude: number | null; // Added from database types
   services_offered: string[] | null;
   rating: number;
   total_reviews: number;
@@ -27,17 +31,38 @@ export const profilesService = {
       .select('*')
       .eq('user_id', userId)
       .single();
-    return { data, error };
+    // We cast to UserProfile after fetching as the Supabase library often returns generic row types
+    return { data: data as UserProfile, error };
   },
 
   async updateProfile(userId: string, updates: Partial<UserProfile>) {
+    // Ensure we only send fields that exist in the database schema
+    const cleanUpdates: Partial<typeof updates> = {
+        full_name: updates.full_name,
+        phone: updates.phone,
+        gender: updates.gender,
+        guardian_phone: updates.guardian_phone,
+        role: updates.role,
+        location: updates.location,
+        latitude: updates.latitude,
+        longitude: updates.longitude,
+        experience_years: updates.experience_years,
+        services_offered: updates.services_offered,
+        is_available: updates.is_available,
+        udyam_registration_number: updates.udyam_registration_number,
+        shop_photo_url: updates.shop_photo_url,
+        is_verified: updates.is_verified,
+        // Exclude properties managed automatically or derived (id, user_id, rating, etc.)
+    };
+
     const { data, error } = await supabase
       .from('profiles')
-      .update(updates)
+      .update(cleanUpdates)
       .eq('user_id', userId)
       .select()
       .single();
-    return { data, error };
+    
+    return { data: data as UserProfile, error };
   },
 
   async getMechanicsByService(service: string, location?: string) {
@@ -53,7 +78,7 @@ export const profilesService = {
     }
 
     const { data, error } = await query.order('rating', { ascending: false });
-    return { data, error };
+    return { data: data as UserProfile[], error };
   },
 
   async getAllMechanics() {
@@ -63,6 +88,6 @@ export const profilesService = {
       .eq('role', 'mechanic')
       .eq('is_available', true)
       .order('rating', { ascending: false });
-    return { data, error };
+    return { data: data as UserProfile[], error };
   },
 };
