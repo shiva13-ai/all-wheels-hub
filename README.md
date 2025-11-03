@@ -1,4 +1,4 @@
-# Welcome to your Service Hub project
+# Welcome to our Service Hub project
 
 ## Project info
 
