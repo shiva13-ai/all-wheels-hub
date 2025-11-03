@@ -23,7 +23,7 @@ interface BookingModalProps {
 }
 
 // --- CONFIG: URL for the Supabase Edge Function to handle the external alert ---
-// NOTE: Use the correct URL for your deployed Edge Function here!
+// NOTE: This URL is no longer used in the client-side fetch, but kept for context.
 const GUARDIAN_ALERT_WEBHOOK_URL = "https://zkpfbiwqgywgmfgbbitg.supabase.co/functions/v1/guardian-alert";
 
 // Function to check if the current time is between 8 PM (20:00) and 6 AM (06:00)
@@ -107,7 +107,8 @@ export const BookingModal = ({ isOpen, onClose, vehicleType, services, preSelect
     const bookingDataWithAlert: CreateBookingData = {
         ...formData,
         estimated_cost: servicePrice,
-        is_late_night_alert: isAlertRequired,
+        // The front-end sets the flag, and the backend trigger will handle the sending.
+        is_late_night_alert: isAlertRequired, 
     };
 
     try {
@@ -116,56 +117,18 @@ export const BookingModal = ({ isOpen, onClose, vehicleType, services, preSelect
         throw error;
       }
       
-      // --- START: Direct Edge Function Call for Safety Alert ---
-      if (isAlertRequired && guardianPhoneExists && booking?.id) {
-          console.log("Safety protocol triggered. Calling Edge Function...");
-          
-          const alertPayload = {
-              booking_id: booking.id,
-              user_id: user.id,
-              guardian_phone: userProfile.guardian_phone,
-              service_type: bookingDataWithAlert.service_type,
-              location: bookingDataWithAlert.location,
-              vehicle_type: bookingDataWithAlert.vehicle_type,
-              booking_created_at: booking.created_at,
-          };
-          
-          // Execute the direct network call from the client environment
-          fetch(GUARDIAN_ALERT_WEBHOOK_URL, {
-              method: 'POST',
-              headers: {
-                  'Content-Type': 'application/json',
-              },
-              body: JSON.stringify(alertPayload),
-          }).then(response => {
-              if (response.ok) {
-                   toast({
-                        title: 'Safety Protocol Activated',
-                        description: `This is a late-night service request. Your emergency contact has been successfully notified.`,
-                        variant: 'destructive',
-                        duration: 8000,
-                    });
-              } else {
-                  console.error("Edge function alert failed with status:", response.status);
-                  // Notify user that alert failed, but booking succeeded
-                   toast({
-                        title: 'Warning: Alert Failed',
-                        description: `Booking succeeded, but the emergency contact alert failed. Check Edge Function logs.`,
-                        variant: 'destructive',
-                        duration: 8000,
-                    });
-              }
-          }).catch(err => {
-              console.error("Error during Edge Function call:", err);
-               toast({
-                    title: 'Warning: Network Error',
-                    description: `Booking succeeded, but the emergency alert failed to send due to a network error.`,
-                    variant: 'destructive',
-                    duration: 8000,
-                });
+      // --- START: Database Trigger handles the Safety Alert ---
+      // We rely on the SQL trigger function now, so we only need client-side confirmation.
+      if (isAlertRequired) {
+          console.log("Safety protocol flagged. Database trigger will handle alert call via pg_net.");
+          toast({
+              title: 'Safety Protocol Flagged',
+              description: `This is a late-night service request. The database trigger is running to notify your emergency contact.`,
+              variant: 'destructive',
+              duration: 8000,
           });
       }
-      // --- END: Direct Edge Function Call ---
+      // --- END: Database Trigger handles the Safety Alert ---
 
       
       // Create chat room for the booking
@@ -173,7 +136,7 @@ export const BookingModal = ({ isOpen, onClose, vehicleType, services, preSelect
         await chatService.ensureChatRoom(booking.id);
       }
       
-      // Final success toast (non-alert toast, if alert wasn't required or alert network call is handling its own success)
+      // Final success toast (non-alert toast, if alert wasn't required)
       if (!isAlertRequired) {
           toast({
             title: 'Request sent!',
