@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,8 +10,9 @@ import { bookingsService, CreateBookingData } from '@/services/supabase/bookings
 import { chatService } from '@/services/supabase/chat';
 import { useAuth } from '@/contexts/AuthContext';
 import { MapPickerDialog } from './MapPickerDialog';
-import { Map } from 'lucide-react';
+import { Map, AlertTriangle } from 'lucide-react';
 import { PaymentModal } from './PaymentModal';
+import { profilesService, UserProfile } from '@/services/supabase/profiles'; // Import profilesService
 
 interface BookingModalProps {
   isOpen: boolean;
@@ -20,6 +21,17 @@ interface BookingModalProps {
   services: Array<{ name: string; price: number }>;
   preSelectedMechanicId?: string;
 }
+
+// --- CONFIG: URL for the Supabase Edge Function to handle the external alert ---
+// NOTE: Use the correct URL for your deployed Edge Function here!
+const GUARDIAN_ALERT_WEBHOOK_URL = "https://zkpfbiwqgywgmfgbbitg.supabase.co/functions/v1/guardian-alert";
+
+// Function to check if the current time is between 8 PM (20:00) and 6 AM (06:00)
+const isLateNight = () => {
+  const currentHour = new Date().getHours();
+  // 20, 21, 22, 23, 0, 1, 2, 3, 4, 5
+  return currentHour >= 12 || currentHour < 6;
+};
 
 export const BookingModal = ({ isOpen, onClose, vehicleType, services, preSelectedMechanicId }: BookingModalProps) => {
   const [formData, setFormData] = useState<CreateBookingData>({
@@ -35,8 +47,25 @@ export const BookingModal = ({ isOpen, onClose, vehicleType, services, preSelect
   const [showMapPicker, setShowMapPicker] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
   const [servicePrice, setServicePrice] = useState(0);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null); 
+
   const { toast } = useToast();
   const { user } = useAuth();
+
+  // Fetch full user profile when the modal opens
+  useEffect(() => {
+    if (isOpen && user) {
+        profilesService.getProfileByAuth().then(({ data }) => {
+            if (data) {
+                setUserProfile(data);
+            }
+        });
+    } else if (!isOpen) {
+        // Reset profile state when closing
+        setUserProfile(null);
+    }
+  }, [isOpen, user]);
+
 
   const handleServiceSelect = (serviceName: string) => {
     const selected = services.find(s => s.name === serviceName);
@@ -48,7 +77,7 @@ export const BookingModal = ({ isOpen, onClose, vehicleType, services, preSelect
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) {
+    if (!user || !userProfile) {
       toast({
         title: 'Authentication required',
         description: 'Please sign in to book a service.',
@@ -57,26 +86,105 @@ export const BookingModal = ({ isOpen, onClose, vehicleType, services, preSelect
       return;
     }
 
+    // --- Security Check Logic ---
+    const isFemaleUser = userProfile.gender === 'female' && userProfile.role === 'user';
+    const isAlertRequired = isFemaleUser && isLateNight();
+    const guardianPhoneExists = !!userProfile.guardian_phone;
+
+    if (isAlertRequired && !guardianPhoneExists) {
+        toast({
+            title: 'Safety Alert',
+            description: 'For your safety, late-night requests require an Emergency Contact on your profile. Please update your profile.',
+            variant: 'destructive',
+        });
+        return;
+    }
+    // --- End Security Check Logic ---
+
     setLoading(true);
+    
+    // Prepare final booking data, including the security flag
+    const bookingDataWithAlert: CreateBookingData = {
+        ...formData,
+        estimated_cost: servicePrice,
+        is_late_night_alert: isAlertRequired,
+    };
+
     try {
-      const { data, error } = await bookingsService.createBooking(formData);
+      const { data: booking, error } = await bookingsService.createBooking(bookingDataWithAlert);
       if (error) {
         throw error;
       }
       
+      // --- START: Direct Edge Function Call for Safety Alert ---
+      if (isAlertRequired && guardianPhoneExists && booking?.id) {
+          console.log("Safety protocol triggered. Calling Edge Function...");
+          
+          const alertPayload = {
+              booking_id: booking.id,
+              user_id: user.id,
+              guardian_phone: userProfile.guardian_phone,
+              service_type: bookingDataWithAlert.service_type,
+              location: bookingDataWithAlert.location,
+              vehicle_type: bookingDataWithAlert.vehicle_type,
+              booking_created_at: booking.created_at,
+          };
+          
+          // Execute the direct network call from the client environment
+          fetch(GUARDIAN_ALERT_WEBHOOK_URL, {
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(alertPayload),
+          }).then(response => {
+              if (response.ok) {
+                   toast({
+                        title: 'Safety Protocol Activated',
+                        description: `This is a late-night service request. Your emergency contact has been successfully notified.`,
+                        variant: 'destructive',
+                        duration: 8000,
+                    });
+              } else {
+                  console.error("Edge function alert failed with status:", response.status);
+                  // Notify user that alert failed, but booking succeeded
+                   toast({
+                        title: 'Warning: Alert Failed',
+                        description: `Booking succeeded, but the emergency contact alert failed. Check Edge Function logs.`,
+                        variant: 'destructive',
+                        duration: 8000,
+                    });
+              }
+          }).catch(err => {
+              console.error("Error during Edge Function call:", err);
+               toast({
+                    title: 'Warning: Network Error',
+                    description: `Booking succeeded, but the emergency alert failed to send due to a network error.`,
+                    variant: 'destructive',
+                    duration: 8000,
+                });
+          });
+      }
+      // --- END: Direct Edge Function Call ---
+
+      
       // Create chat room for the booking
-      if (data?.id) {
-        await chatService.ensureChatRoom(data.id);
+      if (booking?.id) {
+        await chatService.ensureChatRoom(booking.id);
       }
       
-      toast({
-        title: 'Request sent!',
-        description: 'Nearby mechanics have been notified. You\'ll be notified when a mechanic accepts.',
-      });
+      // Final success toast (non-alert toast, if alert wasn't required or alert network call is handling its own success)
+      if (!isAlertRequired) {
+          toast({
+            title: 'Request sent!',
+            description: 'Nearby mechanics have been notified. You\'ll be notified when a mechanic accepts.',
+          });
+      }
       
       onClose();
       // Open payment modal after successful booking
       setShowPayment(true);
+      
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -96,6 +204,13 @@ export const BookingModal = ({ isOpen, onClose, vehicleType, services, preSelect
       description: "Your payment has been processed."
     })
   };
+  
+  // Dynamic visibility for late-night warning banner
+  const isFemaleUser = userProfile?.gender === 'female' && userProfile.role === 'user';
+  const showWarningBanner = isFemaleUser && isLateNight();
+  const warningText = isFemaleUser && !userProfile?.guardian_phone 
+    ? "WARNING: Late-night requests require you to set an Emergency Contact in your profile."
+    : "Safety Note: This is a late-night service. Your Emergency Contact will be notified for your safety.";
 
   return (
     <>
@@ -108,6 +223,15 @@ export const BookingModal = ({ isOpen, onClose, vehicleType, services, preSelect
             </DialogDescription>
           </DialogHeader>
           
+          {showWarningBanner && (
+              <div className={`p-3 rounded-lg flex items-center gap-3 ${isFemaleUser && !userProfile?.guardian_phone ? 'bg-red-100 border border-red-400' : 'bg-yellow-100 border border-yellow-400'}`}>
+                  <AlertTriangle className={`h-5 w-5 ${isFemaleUser && !userProfile?.guardian_phone ? 'text-red-600' : 'text-yellow-600'}`} />
+                  <p className={`text-sm ${isFemaleUser && !userProfile?.guardian_phone ? 'text-red-800' : 'text-yellow-800'}`}>
+                      {warningText}
+                  </p>
+              </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="service_type">Service Type</Label>
@@ -209,4 +333,3 @@ export const BookingModal = ({ isOpen, onClose, vehicleType, services, preSelect
     </>
   );
 };
-
