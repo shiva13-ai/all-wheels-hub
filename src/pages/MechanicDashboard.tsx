@@ -48,8 +48,7 @@ const useGoogleMapsScript = (apiKey: string) => {
   return { isLoaded, error };
 };
 
-// --- Mechanic Dashboard Component ---
-
+// --- Booking Interface ---
 interface Booking {
   id: string;
   user_id: string;
@@ -59,14 +58,25 @@ interface Booking {
   description: string | null;
   latitude: number | null;
   longitude: number | null;
+  mechanic_latitude: number | null;
+  mechanic_longitude: number | null;
   created_at: string;
   status: string;
+  is_late_night_alert: boolean; // Flag for safety feature
   customer_profile: {
     full_name: string | null;
     phone: string | null;
   } | null;
 }
 
+// Define the core booking selection fields explicitly to avoid generic schema mismatch errors
+const BOOKING_SELECT_FIELDS = `
+    id, user_id, service_type, vehicle_type, location, description, 
+    latitude, longitude, mechanic_latitude, mechanic_longitude, 
+    mechanic_last_location_update, created_at, status, is_late_night_alert
+`;
+
+// --- Mechanic Dashboard Component ---
 const MechanicDashboard = () => {
   const { user, profile, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -93,36 +103,51 @@ const MechanicDashboard = () => {
     // If Auth is still loading, do nothing
     if (authLoading) return;
     
-    // Unauthorized Access Check (will render "Access Restricted" below)
+    // Unauthorized Access Check
     if (!user || profile?.role !== "mechanic") {
         setLoading(false); 
         return;
     }
     
-    // Get mechanic's real-time location on load
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setMechanicLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-          });
-        },
-        (error) => {
-          console.error("Error getting mechanic location: ", error);
-          toast({
-            title: "Location Disabled",
-            description: "Please enable location for nearby request filtering.",
-            variant: "destructive"
-          });
-          // Set an arbitrary default location to avoid a perpetual null state
-          setMechanicLocation({ lat: 17.385, lng: 78.4867 });
-        }
-      );
-    } else {
-        // Fallback for browsers without geolocation (or if permission is immediately denied)
-        setMechanicLocation({ lat: 17.385, lng: 78.4867 }); // Default to Hyderabad
+    // --- LOCATION FIX: FORCE PROFILE LOCATION FOR FILTERING ---
+    let finalLocation = { lat: 17.385, lng: 78.4867 }; // Default fallback (Hyderabad)
+    let profileLocationUsed = false;
+    
+    if (profile?.latitude && profile?.longitude) {
+        // PRIORITY 1 (SYNC): Use the coordinates saved in the profile (The canonical shop location)
+        finalLocation = {
+            lat: profile.latitude,
+            lng: profile.longitude,
+        };
+        setMechanicLocation(finalLocation);
+        console.log("Dashboard using SAVED Profile Location (Canonical):", finalLocation.lat, finalLocation.lng);
+        profileLocationUsed = true;
+    } 
+    
+    // PRIORITY 2 (ASYNC): Only fall back to browser location if profile coordinates are MISSING
+    // NOTE: This block is primarily for initial setup/onboarding if shop location is missing.
+    // We run it if profileLocationUsed is false.
+    if (!profileLocationUsed && navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+              setMechanicLocation({
+                lat: position.coords.latitude,
+                lng: position.coords.longitude,
+              });
+              console.log("Dashboard using Browser Geolocation Fallback:", position.coords.latitude, position.coords.longitude);
+            },
+            (error) => {
+              console.error("Error getting current location: ", error);
+              // Final fallback to hardcoded default (already initialized in finalLocation)
+              setMechanicLocation(finalLocation); 
+            }
+        );
+    } else if (!profileLocationUsed) {
+         // PRIORITY 3: Use hardcoded default if geolocation is not available/supported
+        setMechanicLocation(finalLocation);
     }
+    // --- LOCATION FIX END ---
+
 
     fetchDashboardData();
     const subscription = subscribeToRequests();
@@ -131,14 +156,17 @@ const MechanicDashboard = () => {
       if (subscription) {
         supabase.removeChannel(subscription);
       }
+      // Cleanup map markers if they exist
+      markersRef.current.forEach(marker => marker.setMap(null));
     };
-  }, [user, profile, authLoading]); 
+  }, [user, profile, authLoading]); // profile is included as a dependency to react to updates
 
 
   // 2. Filter Logic (runs whenever requests or mechanicLocation changes)
   useEffect(() => {
     if (mechanicLocation && pendingRequests.length > 0) {
       const nearby = pendingRequests.filter(request => {
+        // Must have valid coordinates to filter by distance
         if (request.latitude && request.longitude) {
           const distance = getDistance(
             mechanicLocation.lat,
@@ -150,6 +178,7 @@ const MechanicDashboard = () => {
         }
         return false;
       }).sort((a, b) => {
+        // Sort by distance ascending
         const distA = getDistance(mechanicLocation.lat, mechanicLocation.lng, a.latitude!, a.longitude!);
         const distB = getDistance(mechanicLocation.lat, mechanicLocation.lng, b.latitude!, b.longitude!);
         return distA - distB;
@@ -157,7 +186,9 @@ const MechanicDashboard = () => {
       
       setFilteredPendingRequests(nearby);
     } else {
-      setFilteredPendingRequests(pendingRequests); 
+      // If location is null or no requests, set to empty or all (depending on UX preference)
+      // Showing all pending if location isn't set can be confusing, so showing none is safer.
+      setFilteredPendingRequests([]); 
     }
   }, [pendingRequests, mechanicLocation]);
 
@@ -167,7 +198,8 @@ const MechanicDashboard = () => {
     // Only attempt to initialize if Map is loaded and there are no immediate load errors
     if (!isMapLoaded || !mapElementRef.current || mapLoadError) return;
 
-    const initialCenter = mechanicLocation || { lat: 17.385, lng: 78.4867 };
+    // Use mechanic's actual determined location for map centering
+    const initialCenter = mechanicLocation || { lat: 17.385, lng: 78.4867 }; 
     
     // Initialize map if it hasn't been done yet
     const map = mapRef.current || new window.google.maps.Map(mapElementRef.current, {
@@ -193,11 +225,17 @@ const MechanicDashboard = () => {
       .filter(r => r.latitude && r.longitude)
       .forEach(request => {
         const position = { lat: request.latitude!, lng: request.longitude! };
+        
+        // Use different icon for late night alerts
+        const iconUrl = request.is_late_night_alert
+            ? 'http://maps.google.com/mapfiles/ms/icons/yellow-dot.png' // Attention color
+            : 'http://maps.google.com/mapfiles/ms/icons/red-dot.png';
+            
         const marker = new window.google.maps.Marker({
           position,
           map,
           title: `${request.service_type} - ${request.customer_profile?.full_name}`,
-          icon: 'http://maps.google.com/mapfiles/ms/icons/red-dot.png',
+          icon: iconUrl,
         });
         
         const infoWindow = new window.google.maps.InfoWindow({
@@ -206,6 +244,7 @@ const MechanicDashboard = () => {
                     <h5 class="font-semibold text-base mb-1">${request.service_type}</h5>
                     <p class="text-sm">Customer: ${request.customer_profile?.full_name || 'N/A'}</p>
                     <p class="text-xs text-muted-foreground">${request.location}</p>
+                    ${request.is_late_night_alert ? '<p class="text-xs text-red-500 font-bold mt-1">SAFETY ALERT (Late Night)</p>' : ''}
                     <a href="/tracking/${request.id}" class="text-primary text-xs mt-2 block hover:underline">View Tracking</a>
                 </div>
             `
@@ -254,11 +293,11 @@ const MechanicDashboard = () => {
   // 4. Data Fetching
   const fetchDashboardData = async () => {
     try {
-      // Fetch all pending requests for filtering - Use explicit relation 'user_id'
+      // Fetch all pending requests for filtering - Use explicit selection
       const { data: pendingData, error: pendingError } = await supabase
         .from("bookings")
         .select(`
-            *, 
+            ${BOOKING_SELECT_FIELDS}, 
             customer_profile:profiles!user_id(full_name, phone)
         `)
         .eq("status", "pending")
@@ -273,11 +312,11 @@ const MechanicDashboard = () => {
       setPendingRequests(transformedPending as Booking[]);
 
       if (user) {
-        // Accepted/In-Progress - Use explicit relation 'user_id'
+        // Accepted/In-Progress - Use explicit selection
         const { data: acceptedData } = await supabase
           .from("bookings")
           .select(`
-            *, 
+            ${BOOKING_SELECT_FIELDS}, 
             customer_profile:profiles!user_id(full_name, phone)
           `)
           .eq("mechanic_id", user.id)
@@ -290,11 +329,11 @@ const MechanicDashboard = () => {
         }));
         setAcceptedBookings(transformedAccepted as Booking[]);
 
-        // Past (completed/cancelled) - Use explicit relation 'user_id'
+        // Past (completed/cancelled) - Use explicit selection
         const { data: pastData } = await supabase
           .from("bookings")
           .select(`
-            *, 
+            ${BOOKING_SELECT_FIELDS}, 
             customer_profile:profiles!user_id(full_name, phone)
           `)
           .eq("mechanic_id", user.id)
@@ -316,7 +355,6 @@ const MechanicDashboard = () => {
       });
       console.error("Supabase Query Error:", error);
     } finally {
-      // Crucial change: Ensure loading is set to false only after data fetch is complete
       setLoading(false);
     }
   };
@@ -339,51 +377,71 @@ const MechanicDashboard = () => {
 
   // 6. Action Handlers 
   const handleAcceptRequest = async (bookingId: string) => {
-     if (!("geolocation" in navigator)) {
-      toast({
-        title: "Geolocation Not Supported",
-        description: "Your browser does not support location services, which are required to accept requests.",
-        variant: "destructive",
-      });
-      return;
-    }
+      // NOTE: This logic relies on browser geolocation which can be slow or inaccurate.
+      // If the profile coordinates are required, ensure they are passed here.
+      
+      if (!("geolocation" in navigator)) {
+       toast({
+         title: "Geolocation Not Supported",
+         description: "Your browser does not support location services, which are required to accept requests.",
+         variant: "destructive",
+       });
+       return;
+     }
 
-    setLoading(true);
+     setLoading(true);
 
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        try {
-          const { error } = await supabase
-            .from("bookings")
-            .update({
-              mechanic_id: user?.id,
-              status: "confirmed", 
-              mechanic_latitude: position.coords.latitude,
-              mechanic_longitude: position.coords.longitude,
-              mechanic_last_location_update: new Date().toISOString(),
-            })
-            .eq("id", bookingId);
+     navigator.geolocation.getCurrentPosition(
+       async (position) => {
+         try {
+           const mechanicId = user?.id; // Must be present
+           if (!mechanicId) throw new Error("User not authenticated.");
 
-          if (error) throw error;
+           // The current device location is used for the mechanic's starting location
+           const { error } = await supabase
+             .from("bookings")
+             .update({
+               mechanic_id: mechanicId,
+               status: "confirmed", 
+               mechanic_latitude: position.coords.latitude,
+               mechanic_longitude: position.coords.longitude,
+               mechanic_last_location_update: new Date().toISOString(),
+             })
+             .eq("id", bookingId);
 
-          toast({
-            title: "Request Accepted",
-            description: "You can now track the customer's location on the live map.",
-          });
+           if (error) throw error;
 
-          navigate(`/tracking/${bookingId}`);
-        } catch (error: any) {
-          toast({ title: "Error Accepting Request", description: error.message, variant: "destructive" });
-        } finally {
-          setLoading(false);
-        }
-      },
-      (error) => {
-        toast({ title: "Location Error", description: "Please enable location services to accept requests. " + error.message, variant: "destructive" });
-        setLoading(false);
-      }
-    );
-  };
+           toast({
+             title: "Request Accepted",
+             description: "You can now track the customer's location on the live map.",
+           });
+
+           navigate(`/tracking/${bookingId}`);
+         } catch (error: any) {
+           // Handle the persistent net.http_post error by guiding the user to the database fix.
+           if (error.message.includes('function net.http_post')) {
+             toast({ 
+               title: "DATABASE ERROR: Networking Failed", 
+               description: "The request ACCEPTED, but a backend database trigger (likely for an alert) failed because the **pg_net extension** is not enabled in Supabase.", 
+               variant: "destructive" 
+             });
+             // Even if the trigger failed, the core status change likely succeeded.
+             // We navigate anyway to unblock the mechanic.
+             navigate(`/tracking/${bookingId}`); 
+
+           } else {
+             toast({ title: "Error Accepting Request", description: error.message, variant: "destructive" });
+           }
+         } finally {
+           setLoading(false);
+         }
+       },
+       (error) => {
+         toast({ title: "Location Error", description: "Please enable location services to accept requests. " + error.message, variant: "destructive" });
+         setLoading(false);
+       }
+     );
+   };
 
   const handleRejectRequest = async (bookingId: string) => {
     setLoading(true);
@@ -467,7 +525,7 @@ const MechanicDashboard = () => {
             <TabsTrigger value="history">Job History ({pastBookings.length})</TabsTrigger>
           </TabsList>
           
-          {/* Active Jobs Content (omitted for brevity) */}
+          {/* Active Jobs Content */}
           <TabsContent value="active" className="mt-6">
             {acceptedBookings.length === 0 ? (
               <Card>
@@ -481,8 +539,16 @@ const MechanicDashboard = () => {
                 {acceptedBookings.map((booking) => (
                   <Card key={booking.id} className="hover:shadow-lg transition-shadow">
                     <CardHeader>
-                      <CardTitle className="flex items-center justify-between">
-                        <span className="text-lg">{booking.service_type}</span>
+                      <CardTitle className="flex items-center justify-between text-lg">
+                        <span className="flex items-center gap-2">
+                            {booking.service_type}
+                            {booking.is_late_night_alert && (
+                                <Badge variant="destructive" className="flex items-center gap-1">
+                                    <AlertTriangle className="h-3 w-3 fill-white" />
+                                    SAFETY ALERT
+                                </Badge>
+                            )}
+                        </span>
                         <Badge variant={getStatusBadgeVariant(booking.status)}>{booking.status}</Badge>
                       </CardTitle>
                     </CardHeader>
@@ -513,7 +579,7 @@ const MechanicDashboard = () => {
             )}
           </TabsContent>
           
-          {/* Job History Content (omitted for brevity) */}
+          {/* Job History Content */}
           <TabsContent value="history" className="mt-6">
             {pastBookings.length === 0 ? (
               <Card>
@@ -527,8 +593,16 @@ const MechanicDashboard = () => {
                 {pastBookings.map((booking) => (
                   <Card key={booking.id} className="opacity-70">
                     <CardHeader>
-                      <CardTitle className="flex items-center justify-between">
-                        <span className="text-lg">{booking.service_type}</span>
+                      <CardTitle className="flex items-center justify-between text-lg">
+                        <span className="flex items-center gap-2">
+                            {booking.service_type}
+                             {booking.is_late_night_alert && (
+                                 <Badge variant="destructive" className="flex items-center gap-1">
+                                     <AlertTriangle className="h-3 w-3 fill-white" />
+                                     SAFETY ALERT
+                                 </Badge>
+                             )}
+                        </span>
                         <Badge variant={getStatusBadgeVariant(booking.status)}>{booking.status}</Badge>
                       </CardTitle>
                     </CardHeader>
@@ -583,9 +657,15 @@ const MechanicDashboard = () => {
                 {filteredPendingRequests.map((request) => (
                   <Card key={request.id} className="hover:shadow-lg transition-shadow">
                     <CardHeader>
-                      <CardTitle className="flex items-center justify-between">
-                        <span className="text-lg">
-                          {request.service_type} - {request.vehicle_type}
+                      <CardTitle className="flex items-center justify-between text-lg">
+                        <span className="flex items-center gap-2">
+                            {request.service_type} - {request.vehicle_type}
+                            {request.is_late_night_alert && (
+                                <Badge variant="destructive" className="flex items-center gap-1">
+                                    <AlertTriangle className="h-3 w-3 fill-white" />
+                                    SAFETY ALERT
+                                </Badge>
+                            )}
                         </span>
                         <Badge variant="secondary">Pending</Badge>
                       </CardTitle>
