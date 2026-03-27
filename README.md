@@ -3,7 +3,7 @@
 ## Project info
 
 
-This looks like a complete and well-structured React application built with Vite, TypeScript, Tailwind CSS, and shadcn/ui, leveraging Supabase (PostgreSQL/Auth/Storage) as the primary backend and Firebase (Firestore/Auth/Storage) as a secondary or legacy backend (with most active development seemingly centered on Supabase based on the file contents). It is designed as a multi-vehicle service and marketplace platform called AutoAid/ServiceHub, connecting users with mechanics for service bookings, emergency requests (SOS), and purchasing accessories.
+It is a complete and well-structured React application built with Vite, TypeScript, Tailwind CSS, and shadcn/ui, leveraging Supabase (PostgreSQL/Auth/Storage) as the primary backend and Firebase (Firestore/Auth/Storage) as a secondary or legacy backend (with most active development seemingly centered on Supabase based on the file contents). It is designed as a multi-vehicle service and marketplace platform called AutoAid/ServiceHub, connecting users with mechanics for service bookings, emergency requests (SOS), and purchasing accessories.
 
 ## How can I edit this code?
 
